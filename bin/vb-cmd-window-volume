@@ -1,0 +1,288 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+
+STEP="5"
+ACTION=""
+SELF="${0##*/}"
+
+usage() {
+  shcat <<- EOF
+Usage: $SELF [OPTIONS]
+
+Adjust the volume of the currently focused Hyprland window.
+
+Please note that processes that use ALSA as their output
+may not be picked up by this script (e.g. Telegram).
+
+Options:
+  -u, --up             Window volume up
+  -d, --down           Window volume down
+  -t, --toggle         Window volume toggle
+  -s, --step PERCENT   Volume step size in percent (default: $STEP)
+  -v, --verbose        Enable verbose output
+  -h, --help           Show this help message and exit
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -s | --step)
+      STEP="$2"
+      shift 2
+      ;;
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -u | -d | -t)
+      ACTION="${1#-}"
+      shift
+      ;;
+    --up | --down | --toggle)
+      ACTION="${1#--}"
+      shift
+      ;;
+    *)
+      log Error "Unknown option: $1"
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "$ACTION" ]]; then
+  log Error "Action required (--up, --down, or --toggle)"
+  usage >&2
+  exit 1
+fi
+
+# Extract the focused window's PID and title from a single hyprctl call
+# using jq's @tsv output, avoiding a second jq fork on the same JSON.
+read -r ACTIVE_PID WINDOW_TITLE < <(
+  hyprctl -j activewindow | jq -r '[.pid, .title] | @tsv'
+)
+
+log Info "Action: $ACTION, window: $WINDOW_TITLE"
+
+# hyprctl returns {} on an empty workspace; jq outputs "null" for .pid
+if [[ -z "$ACTIVE_PID" || "$ACTIVE_PID" == "null" ]]; then
+  exit 1
+fi
+
+# Build a flat list of the focused window's PID and all its descendants.
+# This is necessary because many applications (Chromium, Electron apps,
+# Steam games) spawn separate audio-emitting child processes that PipeWire
+# associates with the child PID, not the window's PID.
+#
+# The algorithm reads the full process table once, builds a parent->children
+# adjacency map in awk, then does a BFS from the root PID.
+collect_pids() {
+  local root="$1"
+
+  ps -e -o pid=,ppid= | awk -v root="$root" '
+    { children[$2] = children[$2] " " $1 }
+    END {
+      queue[1] = root
+      depth = 1
+      while (depth > 0) {
+        new_depth = 0
+        for (i = 1; i <= depth; i++) {
+          p = queue[i]
+          print p
+          if (p in children) {
+            n = split(children[p], kids)
+            for (j = 1; j <= n; j++)
+              next_queue[++new_depth] = kids[j]
+          }
+        }
+        depth = new_depth
+        for (i = 1; i <= depth; i++) queue[i] = next_queue[i]
+        delete next_queue
+      }
+    }
+  '
+}
+
+CACHE_DIR="${VIBRANIUM_RUNTIME:-/tmp}/vb-cmd-window-volume"
+for f in "$CACHE_DIR"/*; do
+  [ -f "$f" ] || continue
+  kill -0 "${f##*/}" 2> /dev/null || rm "$f"
+done
+CACHE_FILE="$CACHE_DIR/$ACTIVE_PID"
+
+ALL_PIDS=()
+if [[ -f "$CACHE_FILE" ]]; then
+  printf -v _now '%(%s)T' -1
+  if ((_now - $(stat -c %Y "$CACHE_FILE") < 2)); then
+    mapfile -t ALL_PIDS < "$CACHE_FILE"
+  fi
+fi
+if [[ ${#ALL_PIDS[@]} -eq 0 ]]; then
+  mapfile -t ALL_PIDS < <(collect_pids "$ACTIVE_PID")
+  mkdir -p "$CACHE_DIR" 2> /dev/null
+  printf '%s\n' "${ALL_PIDS[@]}" > "$CACHE_FILE"
+fi
+
+# Collect binary names from all PIDs in the tree for fallback.
+# Many streams omit application.process.id but set
+# application.process.binary, node.name, or application.name.
+#
+# Three fallbacks for root binary: comm, cmdline basename, ps.
+ROOT_BIN=$(< "/proc/$ACTIVE_PID/comm" 2> /dev/null)
+if [[ -z "$ROOT_BIN" ]]; then
+  IFS= read -r -d '' ROOT_BIN < "/proc/$ACTIVE_PID/cmdline" 2> /dev/null
+  ROOT_BIN="${ROOT_BIN##*/}"
+fi
+if [[ -z "$ROOT_BIN" ]]; then
+  ROOT_BIN=$(ps -o comm= -p "$ACTIVE_PID" 2> /dev/null)
+fi
+
+declare -A _bins
+BINS_STR=
+for p in "${ALL_PIDS[@]}"; do
+  comm=$(< "/proc/$p/comm" 2> /dev/null) || continue
+  [[ -n "${_bins[$comm]+set}" ]] && continue
+  _bins[$comm]=1
+  BINS_STR="$BINS_STR $comm"
+done
+[[ -n "$ROOT_BIN" && -z "${_bins[$ROOT_BIN]+set}" ]] && BINS_STR="$BINS_STR $ROOT_BIN"
+BINS_STR="${BINS_STR:1}"
+
+# Extract first word of window title for media.name fallback.
+TITLE_TOKEN="${WINDOW_TITLE%% *}"
+TITLE_TOKEN="${TITLE_TOKEN,,}"
+
+log Info "Window PID tree: ${ALL_PIDS[*]}"
+log Info "Root binary: $ROOT_BIN binaries: $BINS_STR title_token: $TITLE_TOKEN"
+
+# Parse PipeWire/PulseAudio sink-inputs via pactl to find audio streams
+# belonging to the focused window tree. pactl list sink-inputs is used
+# instead of pw-dump because it only enumerates active streams (typically
+# <10 entries vs. hundreds of PipeWire objects).
+#
+# Matching (any of):
+#   1. application.process.id    in PID tree
+#   2. application.process.binary in binary name set
+#   3. node.name / application.name / media.name in bin_set or matches root
+#   4. media.name                contains window title first word (case-insensitive)
+#
+# Output: one line per matching stream:
+#   SINK_INPUT_ID VOLUME_PCT MUTED
+mapfile -t SINK_DATA < <(
+  pactl list sink-inputs | awk \
+    -v pids="${ALL_PIDS[*]}" \
+    -v bins="$BINS_STR" \
+    -v root_bin="$ROOT_BIN" \
+    -v title_token="$TITLE_TOKEN" '
+    function in_bin_set(s) {
+      return (s in bin_set) || (s == root_lower)
+    }
+    function try_match(s) {
+      if (matched) return
+      if (in_bin_set(s)) { matched = 1; return }
+      if (title_token != "" && index(s, title_token) > 0) matched = 1
+    }
+    BEGIN {
+      n = split(pids, a)
+      for (i = 1; i <= n; i++) pid_set[a[i]] = 1
+      m = split(bins, b)
+      for (i = 1; i <= m; i++) bin_set[b[i]] = 1
+      root_lower = tolower(root_bin)
+    }
+
+    /^Sink Input #/ {
+      if (id != "" && matched) print id, vol, muted
+      id   = $3;  sub(/#/, "", id)
+      vol  = 100
+      muted = "no"
+      matched = 0
+    }
+
+    /^[[:space:]]+Mute:/ { muted = $2 }
+
+    /^[[:space:]]+Volume:/ {
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^[0-9]+%[,]?$/) {
+          vol = $i + 0
+          break
+        }
+      }
+    }
+
+    /application\.process\.id/ {
+      gsub(/"/, "", $NF)
+      if ($NF in pid_set) matched = 1
+    }
+
+    /application\.process\.binary/ {
+      gsub(/"/, "", $NF)
+      if ($NF in bin_set) matched = 1
+    }
+
+    /(application|node|media)\.name/ {
+      gsub(/[";]/, "", $NF)
+      try_match(tolower($NF))
+    }
+
+    END { if (id != "" && matched) print id, vol, muted }
+  '
+)
+
+log Info "SINK_DATA: ${SINK_DATA[*]:-(none)}"
+
+if [[ ${#SINK_DATA[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+# track the first matched stream's resulting state for the notification;
+# computed here rather than re-queried via wpctl get-volume after the fact
+first_new_vol=""
+first_new_muted=""
+
+for SINK_ENTRY in "${SINK_DATA[@]}"; do
+  read -r sink_id sink_vol sink_muted <<< "$SINK_ENTRY"
+
+  case "$ACTION" in
+    up)
+      new_vol=$((sink_vol + STEP))
+      ((new_vol > 100)) && new_vol=100
+      pactl set-sink-input-volume "$sink_id" "${new_vol}%"
+      new_muted="$sink_muted"
+      ;;
+    down)
+      new_vol=$((sink_vol - STEP))
+      ((new_vol < 0)) && new_vol=0
+      pactl set-sink-input-volume "$sink_id" "${new_vol}%"
+      new_muted="$sink_muted"
+      ;;
+    toggle)
+      pactl set-sink-input-mute "$sink_id" toggle
+      new_vol="$sink_vol"
+      # invert mute locally -- no re-query needed
+      [[ "$sink_muted" == "yes" ]] && new_muted="no" || new_muted="yes"
+      ;;
+  esac
+
+  # only the first stream drives the notification
+  if [[ -z "$first_new_vol" ]]; then
+    first_new_vol="$new_vol"
+    first_new_muted="$new_muted"
+  fi
+done
+
+# scale current volume into 0-100 relative to max_vol_pct so the bar
+# stays proportional when the above-100% boost is enabled
+bar_value=${first_new_vol:-0}
+
+if [[ "$first_new_muted" == "yes" ]]; then
+  notify-send -r 2 -t 1000 "$WINDOW_TITLE Muted"
+else
+  notify-send -r 2 -t 1000 "$WINDOW_TITLE" -h "int:value:$bar_value"
+fi

@@ -1,0 +1,131 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+
+SELF="${0##*/}"
+
+usage() {
+  shcat << EOF
+Usage: $SELF [OPTION]
+
+Copy URI of the currently playing track to the clipboard.
+Supports MPD and Playerctl.
+
+Options:
+  -n, --notify  Show desktop notification
+  -v, --verbose Enable verbose output
+  -h, --help    Display this help and exit
+EOF
+}
+
+# Parse MPD's music_directory from mpd.conf using a regex that matches
+# optional leading whitespace, the directive, and the quoted path.
+# Expands a leading ~ to $HOME since MPD allows tilde paths in config.
+mpd_music_dir() {
+  local dir
+
+  while IFS= read -r line; do
+    [[ $line =~ ^[[:space:]]*music_directory[[:space:]]*\"(.*)\" ]] && {
+      dir="${BASH_REMATCH[1]}"
+      break
+    }
+  done < "$XDG_CONFIG_HOME/mpd/mpd.conf"
+
+  if [[ -z "$dir" ]]; then
+    return 1
+  fi
+
+  if [[ "$dir" == "~"* ]]; then
+    dir="${dir/#\~/$HOME}"
+  fi
+
+  printf '%s\n' "$dir"
+}
+
+# Decode %XX sequences back to their original bytes. Replaces % with \x
+# and lets printf '%b' interpret the resulting escape sequences.
+_url_decode() {
+  local str="$1"
+  printf '%b\n' "${str//%/\\x}"
+}
+
+# URL-encode a string for use in a URI path by converting each byte
+# outside the RFC 3986 unreserved set to %XX.
+_url_encode() {
+  local str="$1" c i
+  for ((i = 0; i < ${#str}; i++)); do
+    c="${str:i:1}"
+    case "$c" in
+      [a-zA-Z0-9./_~-]) printf '%s' "$c" ;;
+      *) printf '%%%02X' "'$c" ;;
+    esac
+  done
+}
+
+mpd_is_playing() {
+  [[ "$(mpc status %state% 2> /dev/null)" == "playing" ]]
+}
+
+notify=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    -n | --notify)
+      notify=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      log Error "Invalid option: $1"
+      log Error "Try --help for more information"
+      exit 1
+      ;;
+  esac
+done
+
+log Info "Copying current track"
+
+file=""
+
+# Prefer MPD when its control fifo exists (indicating the daemon is active
+# and reachable), falling back to playerctl for all other MPRIS players.
+# The fifo check avoids triggering socket activation on a stopped MPD.
+if command -v mpc > /dev/null && [[ -p "$XDG_RUNTIME_DIR/mpd.fifo" ]] && mpd_is_playing; then
+  track="$(mpc current -f '%file%')"
+  music_dir="$(mpd_music_dir)"
+
+  if [[ -n "$track" && -n "$music_dir" ]]; then
+    file="file://$(_url_encode "$music_dir/$track")"
+  fi
+
+elif playerctl status &> /dev/null; then
+  file="$(playerctl metadata --format '{{xesam:url}}' 2> /dev/null)"
+fi
+
+if [[ -z "$file" ]]; then
+  log Error "no track currently playing"
+  if [[ "$notify" == true ]]; then
+    notify-send -u critical -t 3000 -r 4 "Vibranium" "No track currently playing"
+  fi
+  exit 1
+fi
+
+printf '%s' "$file" | wl-copy --type text/uri-list
+
+if [[ "$notify" == true ]]; then
+  if [[ "$file" =~ ^https?:// ]]; then
+    msg="Link copied to clipboard"
+  else
+    msg="<i><b>$(_url_decode "${file##*/}")</b></i> copied to clipboard"
+  fi
+  notify-send -r 3 "Vibranium" "$msg"
+fi

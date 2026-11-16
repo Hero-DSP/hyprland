@@ -1,0 +1,51 @@
+#!/bin/bash
+
+for dir in "$VIBRANIUM_RUNTIME" "$VIBRANIUM_STATE" "$VIBRANIUM_CACHE"; do
+  if [[ ! -d "$dir" ]]; then
+    mkdir -p "$dir"
+  fi
+done
+
+if [[ -f "$VIBRANIUM_STATE/first-run" ]]; then
+  vb-util-first-run
+  exit 0
+fi
+
+shopt -s nullglob
+source vb-lib-core
+export -f helpers::check
+
+# Point child bash processes at the lib so they auto-source it.
+export BASH_ENV="$VIBRANIUM/bin/vb-lib-core"
+
+# shellcheck disable=SC2016
+awk_expr='/^Exec=/{print substr($0, 6); nextfile}'
+autostart_dir="$XDG_CONFIG_HOME/autostart"
+
+# XDG autostart entries
+while IFS= read -r exec_cmd; do
+  if [[ ! -n "$exec_cmd" ]]; then
+    continue
+  fi
+
+  # shellcheck disable=SC2086
+  setsid -f app2unit -- $exec_cmd
+done < <(awk "$awk_expr" "$autostart_dir" 2> /dev/null)
+
+# Run the default startup scripts first
+HOOKS=("$VIBRANIUM"/default/hooks/startup/*.sh)
+
+if ((${#HOOKS[@]} > 0)); then
+  for hook in "${HOOKS[@]}"; do
+    setsid -f bash "$hook"
+  done
+fi
+
+# Then user scripts
+UHOOKS=("$XDG_CONFIG_HOME"/vibranium/hooks/startup/*.sh)
+
+if ((${#UHOOKS[@]} > 0)); then
+  for hook in "${UHOOKS[@]}"; do
+    setsid -f bash "$hook"
+  done
+fi

@@ -1,0 +1,210 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+usage() {
+  shcat << EOF
+Usage: ${0##*/} [OPTION] [URL]
+
+Download video/audio using yt-dlp with browser cookie extraction.
+
+Options:
+  -h, --help     Display this help and exit
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+source vb-lib-core
+
+URL="${1:-}"
+OUTPUT_DIR="$XDG_DOWNLOAD_DIR"
+
+# All browsers yt-dlp supports, in priority order.
+# Each will be tried in turn; cookieless is the final fallback.
+COOKIE_BR=(chrome chromium firefox brave vivaldi edge opera)
+
+# Show the header only in interactive mode.
+if [[ -z "$1" ]]; then
+  term::show_header
+fi
+
+_operation_canceled() {
+  term::disable_input
+  printf "%s[VIBRANIUM]%s Operation canceled" "$R" "$RS"
+  trap 'exit 1' SIGHUP SIGINT SIGTERM SIGQUIT
+  read -n1 -r -s -p $'. Press any key to exit' dummy
+}
+
+_operation_complete() {
+  term::disable_input
+  printf "%s[VIBRANIUM]%s Operation complete" "$G" "$RS"
+  trap '' SIGHUP SIGINT SIGTERM SIGQUIT
+  # shellcheck disable=SC2034
+  read -n1 -r -s -p $'. Press any key to exit' dummy
+}
+
+trap 'trap "exit 1" INT; printf "\n";_operation_canceled; exit 1' INT
+
+# Try downloading with cookies from each installed browser in turn,
+# falling back to a cookieless attempt as a last resort.
+# On first success the winning browser's cookies are written to the cache
+# file; subsequent runs load that file directly and skip the browser
+# scan entirely. If the cached cookies ever stop working the cache is
+# wiped and the full scan runs again, writing a fresh winner.
+_try_download() {
+  local url="$1"
+  local cookie_cache="$VIBRANIUM_CACHE/${0##*/}"
+  local _stderr_tmp
+
+  local base_args=(
+    -f "bestvideo+bestaudio/best"
+    --remux-video mp4
+    --quiet --progress
+    --extractor-args "youtube:player_client=tv"
+    --throttled-rate 100K
+    -P "$OUTPUT_DIR"
+    --print-to-file "after_move:filepath" "$DL_PATH_FILE"
+  )
+
+  # Fast path - cached cookies from a previous successful run.
+  if [[ -f "$cookie_cache" ]]; then
+    vb::print "$Y" "Downloading..."
+    _stderr_tmp="/tmp/${0##*/}.tmp"
+    if yt-dlp "${base_args[@]}" --cookies "$cookie_cache" "$url" 2> "$_stderr_tmp"; then
+      # Download succeeded. If YouTube flagged our cookies as rotated, wipe the
+      # cache now so the next run picks up a fresh jar - and swallow the warning
+      # (the current download is already done, nothing to act on).
+
+      # Not a bash expression.
+      # shellcheck disable=SC2016
+      if sed -n '/no longer valid/q; $q1' "$_stderr_tmp"; then
+        vb::print "$Y" "YouTube cookies rotated - cache cleared for next run"
+        rm -f "$cookie_cache"
+      fi
+      rm -f "$_stderr_tmp"
+      return 0
+    fi
+    # Download failed. Discard stderr - DRM/format errors here are just symptoms
+    # of stale cached cookies; the browser re-scan below will sort it out, and
+    # any genuine URL problem will surface again during the cookieless fallback.
+    rm -f "$_stderr_tmp" "$cookie_cache"
+    vb::print "$Y" "Cached cookies stale - re-scanning browsers"
+  fi
+
+  # Slow path - try every browser; write cookies on first success so
+  # the next invocation takes the fast path.
+  for browser in "${COOKIE_BR[@]}"; do
+    vb::print "$Y" "Trying ${B}${browser}${RS} cookies"
+    # --cookies writes the merged jar to disk when the download succeeds.
+    if yt-dlp "${base_args[@]}" --cookies-from-browser "$browser" \
+      --cookies "$cookie_cache" "$url" 2> /dev/null; then
+      return 0
+    fi
+    # Discard any partial cookie file the failed attempt may have written.
+    rm -f "$cookie_cache"
+  done
+
+  # All browsers exhausted - attempt without cookies (this will also
+  # surface the real error if the URL itself is the problem).
+  vb::print "$Y" "No browser cookies worked. Downloading without cookies"
+  yt-dlp "${base_args[@]}" "$url"
+}
+
+# Returns 0 (true) when the terminal window is NOT on the currently focused
+# workspace, meaning the user has switched away and a notification is useful.
+# Returns 1 when the window is on the active workspace (user can see the
+# terminal output directly).
+#
+# The window is identified by its fixed class and title, which Vibranium
+# sets via window rules when launching this script. This is more reliable
+# than PID (shared across all Alacritty windows) or address (requires
+# capturing activewindow at startup before the user can switch away).
+_window_is_offscreen() {
+  local active_ws our_ws
+
+  active_ws="$(hyprctl -j activeworkspace | jq -r '.id')"
+
+  our_ws="$(hyprctl -j clients | jq -r \
+    '.[] | select(.title == "vb-util-yt-dlp") | .workspace.id')"
+
+  # If the window is not found in the client list (e.g. it was closed),
+  # treat it as onscreen to avoid spurious notifications.
+  [[ -z "$our_ws" ]] && return 1
+
+  # Return 0 when the workspace IDs differ (window is offscreen).
+  [[ "$our_ws" != "$active_ws" ]]
+}
+
+if ! command -v yt-dlp > /dev/null; then
+  if ! term::ask_yes_no Y "${B}yt-dlp${RS} not found. Install it now?"; then
+    _operation_canceled
+    exit 1
+  fi
+
+  vb-pkg-install --embedded -- yt-dlp
+  term::enable_input
+fi
+
+while true; do
+  if [[ -z "$URL" ]]; then
+    read -rp "${Y}[VIBRANIUM]${RS} Enter video URL: " URL
+  fi
+
+  if [[ $URL =~ ^https?:// ]]; then
+    break
+  fi
+
+  vb::print "$R" "Not a valid URL!"
+  URL=""
+done
+
+# Tmpfile receives the final file path from yt-dlp via --print-to-file.
+# Reset the trap so the tmpfile is removed on Ctrl-C as well.
+DL_PATH_FILE="$(mktemp)"
+trap 'trap "exit 1" INT; rm -f "$DL_PATH_FILE"; printf "\n"; _operation_canceled; exit 1' INT
+
+if ! _try_download "$URL"; then
+  rm -f "$DL_PATH_FILE"
+  if _window_is_offscreen; then
+    notify-send -r 3 -t 10000 -u critical "Video Downloader" \
+      "Failed to download:\n<span foreground='${P_RED}'>$URL</span>!"
+    exit 1
+  fi
+
+  vb::print "$R" "Something went wrong!"
+  _operation_canceled
+  exit 1
+fi
+
+# Read and strip the trailing newline that --print-to-file appends.
+DL_FILE="$(< "$DL_PATH_FILE")"
+DL_FILE="${DL_FILE%$'\n'}"
+rm -f "$DL_PATH_FILE"
+
+# Copy the file URI to the clipboard so it can be pasted directly into
+# file managers, media players, or anything that accepts drag-and-drop.
+if [[ -n "$DL_FILE" && -f "$DL_FILE" ]]; then
+  printf 'file://%s' "$DL_FILE" | wl-copy --type text/uri-list
+  vb::print "$G" "Copied to clipboard: ${B}file://${DL_FILE}${RS}"
+fi
+
+vb::print "$G" "Video has been saved to ${B}$OUTPUT_DIR${RS}"
+
+if _window_is_offscreen; then
+  notify-send -r 3 -t 5000 "Video Downloader" \
+    "Video has been successfully saved to <b><span foreground='${P_BLUE}'>$OUTPUT_DIR</span></b>"
+  exit 0
+fi
+
+_operation_complete

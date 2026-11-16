@@ -1,0 +1,130 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+SELF="${0##*/}"
+FORCE=false
+NUKE=false
+
+copy_file() {
+  local src="$1" dst="$2" bak="$3"
+  if [[ -f $dst ]]; then
+    if [[ $NUKE == true ]]; then
+      rm -f "$dst"
+      log Info "Removed $dst"
+    else
+      cp -f "$dst" "$bak" 2> /dev/null || true
+    fi
+    cp -f "$src" "$dst" 2> /dev/null
+
+    if [[ $NUKE != true ]] && cmp -s "$dst" "$bak"; then
+      rm -f "$bak"
+      log Info "$dst unchanged, no backup needed"
+    else
+      log Info "Replaced $dst"
+    fi
+  else
+    cp -f "$src" "$dst" 2> /dev/null
+    log Info "Created $dst from Vibranium config"
+  fi
+}
+
+copy_dir() {
+  local src="$1" dst="$2" bak="$3"
+
+  if [[ -d $dst ]]; then
+    if [[ $NUKE == true ]]; then
+      rm -rf "$dst"
+      log Info "Removed $dst"
+    else
+      cp -rf "$dst" "$bak" 2> /dev/null || true
+      log Info "Backed up $dst to $bak"
+    fi
+  fi
+
+  if ! [[ -d "$dst" ]]; then
+    mkdir -p "$dst"
+  fi
+
+  cp -rf "$src"/. "$dst" 2> /dev/null
+  log Info "Synced $dst from Vibranium config"
+}
+
+usage() {
+  shcat << EOF
+Usage: $SELF CONFIG_PATH
+
+Copy the named config from \$VIBRANIUM/config back to ~/.config. Keeps backups.
+
+Example:
+  $SELF hypr/hyprlock.conf
+  $SELF waybar/config.jsonc
+
+Options:
+  -n, --nuke         Delete existing target instead of backing up
+  -f, --force        With --nuke, skip the confirmation prompt
+  -v, --verbose      Enable verbose output
+  -h, --help         Display this help and exit
+EOF
+}
+
+while (($# > 0)); do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    -n | --nuke)
+      NUKE=true
+      shift
+      ;;
+    -f | --force)
+      FORCE=true
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ -z ${1:-} ]]; then
+  log Error "missing CONFIG_PATH"
+  log Error "Try '$SELF --help' for more information"
+  exit 1
+fi
+
+CONFIG_REL="$1"
+USER_FILE="$XDG_CONFIG_HOME/$CONFIG_REL"
+SRC_FILE="${VIBRANIUM}/config/$CONFIG_REL"
+printf -v BAK_FILE '%s.bak.%(%s)T' "$USER_FILE" -1
+
+if [[ $NUKE == true && $FORCE != true ]]; then
+  read -rp "Delete $USER_FILE instead of backing up? [y/N] " confirm
+  if [[ $confirm != [yY] ]]; then
+    log Info "Nuke declined, nothing changed"
+    exit 1
+  fi
+fi
+
+if [[ -d $SRC_FILE ]]; then
+  DIR=${USER_FILE%/*}
+  if ! [[ -d $DIR ]]; then
+    mkdir -p "$DIR"
+  fi
+  copy_dir "$SRC_FILE" "$USER_FILE" "$BAK_FILE"
+elif [[ -f $SRC_FILE ]]; then
+  DIR=${USER_FILE%/*}
+  if ! [[ -d $DIR ]]; then
+    mkdir -p "$DIR"
+  fi
+  copy_file "$SRC_FILE" "$USER_FILE" "$BAK_FILE"
+else
+  log Error "Vibranium config not found: $SRC_FILE"
+  exit 1
+fi

@@ -1,0 +1,52 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+
+usage() {
+  shcat << EOF
+Usage: ${0##*/} [OPTION]
+
+Check whether a battery is present and active in /sys/class/power_supply.
+
+Exit status:
+  0    Battery found and marked as present
+  1    No active battery detected
+
+Options:
+  -v, --verbose  Enable verbose output
+  -h, --help    Show this help and exit
+
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+for bat in /sys/class/power_supply/BAT*; do
+  if [[ -r $bat/present ]]; then
+    if [[ $(< "$bat"/present) == "1" ]]; then
+      if [[ $(< "$bat"/type) == "Battery" ]]; then
+        log Info "Battery found: $bat"
+        exit 0
+      fi
+    fi
+  fi
+done
+
+log Info "No battery detected"
+exit 1

@@ -1,0 +1,190 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+
+SELF="${0##*/}"
+CONF="$XDG_CONFIG_HOME/hypr/hyprsunset.conf"
+STATE_FILE="$VIBRANIUM_STATE/nightshift"
+LOCKFILE="$VIBRANIUM_RUNTIME/$SELF.lock"
+STEP=100
+
+usage() {
+  shcat << EOF
+Usage: $SELF [OPTIONS]
+
+Options:
+  -i, --inc, --increase  Increase temperature by STEP (or +)
+  -d, --dec, --decrease  Decrease temperature by STEP (or -)
+  -t, --toggle           Toggle night light
+  -s, --set TEMP         Set absolute temperature (in Kelvin)
+  -n, --step N           Use step N (default is $STEP)
+  -v, --verbose          Enable verbose output
+  -h, --help             Show this help and exit
+
+Notes:
+  Temperature must be between 1000 and 20000.
+  The script expects a state file at: $STATE_FILE
+EOF
+}
+
+# Night shift (blue-light filter) is not available inside VMs because
+# hyprsunset may not function correctly on virtualised GPUs.
+if [[ "$CHASSIS_TYPE" == vm ]]; then
+  log Error "Not available in a VM"
+  exit 1
+fi
+
+# Lock on fd 10 to prevent concurrent adjustments from racing on the
+# config file write and the hyprsunset IPC call.
+exec 10> "$LOCKFILE" || {
+  log Error "another instance of $SELF already running!"
+  exit 1
+}
+
+flock -n 10 || exit 0
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 0
+fi
+
+action=""
+ARG_TEMP=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -t | --toggle)
+      action="toggle"
+      shift
+      ;;
+    -i | --inc | --increase | +)
+      action="inc"
+      shift
+      ;;
+    -d | --dec | --decrease | -)
+      action="dec"
+      shift
+      ;;
+    -s | --set)
+      action="set"
+      shift
+      ARG_TEMP="$1"
+      shift
+      ;;
+    -n | --step)
+      shift
+      STEP="$1"
+      shift
+      ;;
+    [0-9]*)
+      action="set"
+      ARG_TEMP="$1"
+      shift
+      ;;
+    *)
+      log Error "Invalid option: $1"
+      log Error "Try --help for more information"
+      exit 1
+      ;;
+  esac
+done
+
+if [[ ! -f "$STATE_FILE" ]]; then
+  log Error "Night Light state file not found: $STATE_FILE"
+  exit 1
+fi
+
+state="$(< "$STATE_FILE")"
+
+# Read the current temperature from the hyprsunset config. Needed for
+# toggle (re-applies the configured value), inc, and dec actions.
+# Only read when the action actually needs the current value.
+if [[ $action =~ ^(toggle|inc|dec)$ ]]; then
+  while IFS= read -r line; do
+    case $line in
+      *"temperature = "*)
+        tmp=${line#*temperature = }
+        CURRENT_TEMP=${tmp%%[^0-9]*}
+
+        unset tmp
+        break
+        ;;
+    esac
+  done < "$CONF"
+fi
+
+# Toggle between active and suspended state. hyprsunset is called in
+# the background since the IPC involves a D-Bus round-trip. The state
+# file is updated synchronously before the module refresh.
+if [[ "$action" == "toggle" ]]; then
+  case "$state" in
+    suspended)
+      hyprctl -q hyprsunset temperature "$CURRENT_TEMP" &
+      printf "active" > "$STATE_FILE"
+      ;;
+    active)
+      hyprctl -q hyprsunset identity &
+      printf "suspended" > "$STATE_FILE"
+      ;;
+    *)
+      log Error "Unknown state in state file: $state"
+      exit 1
+      ;;
+  esac
+
+  vb-refresh-waybar-module nightshift &
+  exit 0
+fi
+
+if [[ "$action" == "inc" || "$action" == "dec" ]]; then
+  if [[ "$state" == "suspended" ]]; then
+    log Warn "Night Light is suspended"
+    exit 1
+  fi
+
+  case "$action" in
+    inc)
+      TEMP=$((CURRENT_TEMP + STEP))
+      ;;
+    dec)
+      TEMP=$((CURRENT_TEMP - STEP))
+      ;;
+  esac
+fi
+
+if [[ "$action" == "set" ]]; then
+  if ! [[ "$ARG_TEMP" =~ ^[0-9]+$ ]]; then
+    log Error "Invalid temperature: $ARG_TEMP"
+    exit 1
+  fi
+  TEMP="$ARG_TEMP"
+fi
+
+if [[ -z "${TEMP:-}" ]]; then
+  log Error "No operation performed"
+  exit 0
+fi
+
+if ((TEMP < 1000 || TEMP > 20000)); then
+  log Error "Temperature must be between 1000K and 20000K"
+  exit 1
+fi
+
+# Write the hyprsunset config file with the new temperature.
+# The file is marked auto-generated so users know manual edits will be
+# overwritten. max-gamma = 150 limits the colour transformation range.
+printf '# Auto-generated! All changes will be overwritten!\n' > "$CONF"
+printf '\nmax-gamma = 150\n\nprofile {\n\ttemperature = %s\n}\n' "$TEMP" >> "$CONF"
+hyprctl -q hyprsunset temperature "$TEMP" &
+
+vb-refresh-waybar-module nightshift &

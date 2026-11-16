@@ -1,0 +1,99 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+
+SELF="${0##*/}"
+
+usage() {
+  shcat << EOF
+Usage: $SELF [--on|--off|--get]
+
+Toggle Wi-Fi power saving on all wireless interfaces.
+
+Note: this script is being used by a udev rule, which is
+      is installed on a portable devices by default.
+      This script is not intended to be launched by a
+      regular user, but you can. Requires sudo privileges.
+
+Options:
+  --on      enable power saving
+  --off     disable power saving
+  --get     show current power saving state for each interface
+  -v, --verbose  Enable verbose output
+  --help    display this help and exit
+EOF
+}
+
+value=""
+ACTION=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    --on | --off)
+      ACTION="${1#--}"
+      shift
+      ;;
+    --get)
+      ACTION="get"
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    "")
+      usage >&2
+      exit 1
+      ;;
+    *)
+      log Error "unknown option: $1"
+      log Error "Try --help for more information"
+      exit 1
+      ;;
+  esac
+done
+
+value="$ACTION"
+
+if [[ -z "$value" ]]; then
+  usage >&2
+  exit 1
+fi
+
+log Info "Wi-Fi powersave: $value"
+
+found=0
+
+# Enumerate wireless interfaces via iw (look for "Interface wlan0" etc.)
+# and either query or set power_save on each. When running as root (e.g.
+# from a udev rule), direct access is used; otherwise sudo is prepended.
+while IFS= read -r iface; do
+  if [[ $value == "get" ]]; then
+    if state=$(iw dev "$iface" get power_save 2> /dev/null); then
+      printf "  %-12s %s\n" "$iface:" "$state"
+      found=$((found + 1))
+    else
+      log Error "Unable to query power save on $iface"
+    fi
+  else
+    if ((EUID != 0)); then
+      cmd=(sudo iw)
+    else
+      cmd=(iw)
+    fi
+    if "${cmd[@]}" dev "$iface" set power_save "$value" 2> /dev/null; then
+      found=$((found + 1))
+    fi
+  fi
+done < <(iw dev | awk '/^\s+Interface / { print $2 }')
+
+if ((found == 0)); then
+  log Error "No wireless interfaces found"
+  exit 1
+fi

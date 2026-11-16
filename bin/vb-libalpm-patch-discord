@@ -1,0 +1,121 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+MANUAL=false
+
+log() {
+  local level="$1"
+  shift
+  if [[ -t 0 ]]; then
+    if $VERBOSE; then
+      echo "[${0##*/}] $level: $*" >&2
+    fi
+  else
+    case "$level" in
+      Error)
+        echo "==> ERROR: $*"
+        ;;
+      Warn)
+        echo "==> WARN: $*"
+        ;;
+      *)
+        echo "==> $*"
+        ;;
+    esac
+  fi
+}
+
+usage() {
+  shcat << EOF
+Usage: ${0##*/} [OPTION]
+
+Patch Discord with Vencord.
+
+Options:
+  -m, --manual     Patch manually, bypass auto checks
+  -u, --uninstall  Uninstall Vencord and OpenASAR
+  -v, --verbose    Enable verbose output
+  -h, --help       Show this help and exit
+EOF
+}
+
+ACTION="install"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -m | --manual)
+      MANUAL=true
+      shift
+      ;;
+    -u | --uninstall | -uninstall)
+      ACTION="uninstall"
+      shift
+      ;;
+    *)
+      printf '%s: invalid option -- %s\n' "${0##*/}" "$1" >&2
+      printf 'Try "%s --help" for more information.\n' "${0##*/}" >&2
+      exit 2
+      ;;
+  esac
+done
+
+$MANUAL && export VERBOSE=true
+
+if ! $MANUAL && ! [[ -d "$XDG_CONFIG_HOME/Vencord" ]]; then
+  if [[ -t 0 ]]; then
+    echo "[${0##*/}] Info: Discord wasn't patched before; use ${0##*/} --manual to force" >&2
+  else
+    echo "==> Discord wasn't patched before; use ${0##*/} --manual to force"
+  fi
+  exit 0
+fi
+
+# VencordInstallerCli is a self-contained CLI binary that patches Discord
+# in-place.  OpenASAR (the Electron ASAR replacement) is also installed
+# by the same binary for better performance.
+PATCH_PATH="$XDG_CONFIG_HOME/discord"
+URL='https://github.com/Vendicated/VencordInstaller/releases/latest/download/VencordInstallerCli-Linux'
+CLI="/tmp/vencord-installer"
+
+log Info "Downloading Vencord CLI installer"
+
+if command -v wget > /dev/null; then
+  wget -q "$URL" -O "$CLI"
+elif command -v curl > /dev/null; then
+  curl -fsSL "$URL" -o "$CLI"
+else
+  log Error "Neither wget nor curl is installed"
+  exit 1
+fi
+
+if (($?)); then
+  log Error "Couldn't download Vencord CLI installer"
+  exit 1
+fi
+
+chmod +x "$CLI"
+
+if [ "$ACTION" = "uninstall" ]; then
+  log Info "Uninstalling Vencord from Discord"
+  "$CLI" -uninstall -uninstall-openasar -location "$PATCH_PATH"
+else
+  log Info "Patching Discord with Vencord"
+  "$CLI" -install -install-openasar -location "$PATCH_PATH"
+fi
+
+if (($?)); then
+  log Error "Vencord CLI installer failed"
+  exit 1
+fi
+
+rm -rf "$CLI"

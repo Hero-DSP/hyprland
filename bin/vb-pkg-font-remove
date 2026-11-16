@@ -1,0 +1,108 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+
+usage() {
+  shcat << EOF
+Usage: ${0##*/} [OPTION]
+
+Interactive font package remover using fzf.
+
+Options:
+  -v, --verbose  Enable verbose output
+  -h, --help     Show this help and exit
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+source vb-lib-core
+
+if [[ -f "$XDG_CONFIG_HOME/vibranium/current/theme/fzf" ]]; then
+  source "$XDG_CONFIG_HOME/vibranium/current/theme/fzf"
+fi
+
+FZF_ARGS=(
+  --multi
+  --ignore-case
+  --highlight-line
+
+  --info 'hidden'
+  --border 'bold'
+
+  --border-label ' alt-p: toggle description, alt-j/k: scroll description, ctrl-j/k: next/prev item, tab: multi-select '
+  --border-label-pos 'bottom'
+
+  --list-label 'Package list'
+  --list-border 'bold'
+
+  --input-label 'Filter packages'
+  --input-border 'bold'
+
+  --preview 'pacman -Qii {1}'
+  --preview-border 'bold'
+  --preview-window 'right:75%:wrap'
+  --preview-label 'Package Information'
+
+  --bind 'alt-p:toggle-preview'
+  --bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up'
+  --bind 'alt-k:preview-up,alt-j:preview-down'
+
+  --color "${FZF_COLORS:-pointer:white,marker:green}"
+)
+
+_operation_canceled() {
+  local color="$R"
+
+  [[ "$1" == "--positive" ]] && color="$G"
+
+  printf "%s[VIBRANIUM]%s Operation canceled" "$color" "$RS"
+  trap 'exit 1' SIGHUP SIGINT SIGTERM SIGQUIT
+  # shellcheck disable=SC2034
+  read -n1 -r -s -p $'. Press any key to exit' dummy
+}
+
+# List installed font packages by matching their names against common
+# font package prefixes (ttf, otf) and Nerd Font suffixes.
+_get_fonts() {
+  log Info "Fetching installed font packages"
+  local pkg
+  for pkg in $(pacman -Qq); do
+    case "$pkg" in
+      ttf* | otf* | *-nerd | *-nerd-mono)
+        printf '%s\n' "$pkg"
+        ;;
+    esac
+  done
+}
+
+trap 'trap "exit 1" SIGINT; printf "\n"; _operation_canceled; exit 1' SIGINT
+
+term::show_header
+
+mapfile -t LIST < <(_get_fonts)
+mapfile -t CHOSEN < <(printf "%s\n" "${LIST[@]}" | fzf "${FZF_ARGS[@]}")
+
+if [[ ${#CHOSEN[@]} -eq 0 ]]; then
+  _operation_canceled --positive
+  exit 0
+fi
+
+log Info "${#CHOSEN[@]} font(s) selected"
+vb-pkg-remove --no-logo -- "${CHOSEN[@]}"

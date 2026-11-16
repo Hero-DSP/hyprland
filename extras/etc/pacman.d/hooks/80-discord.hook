@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Target = discord
+Type = Package
+
+[Action]
+Description = Updating Vencord
+When = PostTransaction
+Exec = /usr/local/bin/su-bridge --user -- vb-libalpm-patch-discord

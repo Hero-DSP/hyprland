@@ -1,0 +1,112 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+SELF="${0##*/}"
+CLIENTS=(ncmpcpp rmpc cmus vimpc)
+
+VERBOSE=${VERBOSE:-false}
+
+usage() {
+  shcat << EOF
+Usage: $SELF [OPTIONS]
+
+Detect an installed MPD client.
+If a window exists, focus it. Otherwise launch it.
+
+Arguments:
+  CLIENT      Optional: force specific client (ncmpcpp, rmpc, cmus, vimpc)
+
+Options:
+  --client    Explicitly set client
+  -v, --verbose Enable verbose output
+  -h, --help  Display this help and exit
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    --client=*)
+      REQUESTED_CLIENT="${1#*=}"
+      shift
+      ;;
+    --client)
+      shift
+      REQUESTED_CLIENT="$1"
+      shift
+      ;;
+    *)
+      if [[ "$1" != -* ]]; then
+        REQUESTED_CLIENT="$1"
+        shift
+      else
+        log Error "Unknown option: $1"
+        log Error "Try --help for more information"
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if ! command -v mpd > /dev/null; then
+  log Error "MPD is not installed"
+  exit 1
+fi
+
+CLIENT=""
+
+# If user requested specific client, validate it
+if [[ -n "$REQUESTED_CLIENT" ]]; then
+  log Info "Requested client: $REQUESTED_CLIENT"
+  if command -v "$REQUESTED_CLIENT" > /dev/null 2>&1; then
+    CLIENT="$REQUESTED_CLIENT"
+  else
+    log Error "'$REQUESTED_CLIENT' is not installed"
+    exit 1
+  fi
+else
+  for c in "${CLIENTS[@]}"; do
+    if command -v "$c" > /dev/null 2>&1; then
+      CLIENT="$c"
+      log Info "Detected MPD client: $CLIENT"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$CLIENT" ]]; then
+  log Warn "No MPD client found"
+  [[ -t 2 ]] && log Error "Could not find installed MPD client"
+  notify-send -r 4 -t 3000 "Vibranium" "Could not find installed MPD client!"
+  exit 1
+fi
+
+WINDOW_ADDRESS="$(
+  jq -r --arg p "$CLIENT" '
+    first(
+      .[]
+      | select(
+          (.class | test("\\b" + $p + "\\b"; "i"))
+          or
+          (.title | test("\\b" + $p + "\\b"; "i"))
+        )
+      | .address
+    )
+  ' < <(hyprctl clients -j)
+)"
+
+if [[ -n "$WINDOW_ADDRESS" ]]; then
+  log Info "Focusing existing MPD client: address=$WINDOW_ADDRESS"
+  hyprctl -q dispatch "hl.dsp.focus({window = 'address:${WINDOW_ADDRESS}'})"
+else
+  log Info "No matching MPD client window, launching: $CLIENT"
+  xdg-terminal-exec --app-id=mpd --title="$CLIENT" -- "$CLIENT"
+fi

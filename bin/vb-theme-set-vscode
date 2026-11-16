@@ -1,0 +1,95 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+
+usage() {
+  shcat << EOF
+Usage: ${0##*/} [OPTION]
+
+Apply the active Vibranium color theme to VSCode/VSCodium editors.
+
+Options:
+  -v, --verbose  Enable verbose output
+  -h, --help     Show this help and exit
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -v | --verbose)
+      export VERBOSE=true
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+THEME="$XDG_CONFIG_HOME/vibranium/current/theme/vscode.json"
+log Info "vscode theme file: $THEME"
+
+# Strip JS/C-style comments (// ...) from a JSONC file before passing
+# it to jq, which cannot parse JSONC natively.
+_jsonc() { sed 's|[[:space:]]*//.*||' "$1"; }
+
+# Apply the theme to a single editor variant.  Each editor stores its
+# settings in a different config directory (Code - OSS, Code, Insiders,
+# Codium, Cursor) so this function is called once per installed editor.
+set_theme() {
+  local editor_cmd="$1"
+  local settings_path="$2"
+
+  command -v "$editor_cmd" > /dev/null || { log Info "$editor_cmd not found, skipping"; return 0; }
+
+  if [[ -f $THEME ]]; then
+    theme_name=$(_jsonc "$THEME" | jq -r '.name')
+    extension=$(_jsonc "$THEME" | jq -r '.extension // empty')
+
+    log Info "set_theme: $editor_cmd theme=$theme_name extension=$extension"
+
+    # Install the required theme extension if it is not already present.
+    if [[ -n $extension ]] && ! "$editor_cmd" --list-extensions 2> /dev/null | grep -Fxq "$extension"; then
+      log Info "installing extension $extension for $editor_cmd"
+      "$editor_cmd" --install-extension "$extension" > /dev/null 2>&1
+      log Info "extension $extension installed"
+    elif [[ -n $extension ]]; then
+      log Info "extension $extension already installed for $editor_cmd"
+    fi
+
+    mkdir -p "$(dirname "$settings_path")"
+    [[ -f $settings_path ]] || printf '{\n}\n' > "$settings_path"
+
+    # When the settings file is empty (just {}), insert a placeholder
+    # key so the sed replacement below has something to match against.
+    if grep -q '^\s*{\s*}\s*$' "$settings_path"; then
+      sed -i --follow-symlinks 's/{\s*}/{"workbench.colorTheme": ""}/' "$settings_path"
+    fi
+
+    # Replace the workbench.colorTheme value with the new theme name.
+    log Info "Applying theme $theme_name to $editor_cmd"
+    sed -i --follow-symlinks -E "s/(\"workbench.colorTheme\"[[:space:]]*:[[:space:]]*\")[^\"]*(\")/\1$theme_name\2/" "$settings_path"
+  elif [[ -f $settings_path ]]; then
+    # No theme file exists: remove any workbench.colorTheme entry that
+    # may have been left behind by a previous theme application.
+    log Info "Clearing theme from $editor_cmd settings"
+    sed -i --follow-symlinks -E 's/\"workbench\.colorTheme\"[[:space:]]*:[^,}]*,?//' "$settings_path"
+  fi
+}
+
+if [[ -f /usr/share/applications/code-oss.desktop ]]; then
+  set_theme "code" "$XDG_CONFIG_HOME/Code - OSS/User/settings.json"
+elif [[ -f /usr/share/applications/code.desktop ]]; then
+  set_theme "code" "$XDG_CONFIG_HOME/Code/User/settings.json"
+fi
+
+set_theme "code-insiders" "$XDG_CONFIG_HOME/Code - Insiders/User/settings.json"
+set_theme "codium" "$XDG_CONFIG_HOME/VSCodium/User/settings.json"
+set_theme "vscodium-insiders" "$XDG_CONFIG_HOME/VSCodium - Insiders/User/settings.json"
+set_theme "cursor" "$XDG_CONFIG_HOME/Cursor/User/settings.json"

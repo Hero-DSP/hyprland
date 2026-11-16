@@ -1,0 +1,52 @@
+# Place your environment variables here.
+# The text below is just an example. Feel free to delete or change it
+# All changes are applied only after re-login!
+
+export SUDO_PROMPT=$'\033[1;31m[sudo]\033[0m Password for '"$USER"': '
+
+# Set your default editor
+# This could be nvim, nano, emacs, kate or whatever you want
+export EDITOR="nvim"
+export SYSTEMD_EDITOR="$EDITOR"
+export MANPAGER="$EDITOR +Man!"
+
+# If running on a real hardware, Vibranium will set all the GPU/graphics
+# related special environment variables for you automatically.
+# This file lives in the Vibranium installation folder, so do not edit it.
+# If you don't need it - just remove or comment out this line.
+# Variables:
+#
+#   NVIDIA:
+#                      WLR_NO_HARDWARE_CURSORS
+#                      NVD_BACKEND
+#                      GBM_BACKEND
+#                      __GLX_VENDOR_LIBRARY_NAME
+#
+#   AMD/Intel/NVIDIA:
+#                     LIBVA_DRIVER_NAME
+#                     VDPAU_DRIVER
+#
+if ! [[ "$CHASSIS_STATE" == "vm" ]]; then
+  source "$VIBRANIUM/default/uwsm/gpu-env"
+fi
+
+#########################################################################################
+
+# You can add append to $PATH like so:
+# path_add "$HOME/bin"
+
+# This exact form is required.
+# path_add is a special command available only in environment files.
+# It appends entries to $PATH without duplicating existing ones,
+# which is necessary given how the environment is built.
+
+#########################################################################################
+
+# If you actively use mangohud, you can specify its entire configuration in a single variable,
+# instead of a special file in the root folder of each game:
+export MANGOHUD_CONFIG="fps_only,alpha=0.3,background_alpha=0,text_color=ffffff,font_size=18"
+
+# If you are a pass user (https://www.passwordstore.org/), you can specify a specific folder that pass will use to look for passwords. For example:
+export PASSWORD_STORE_DIR="$XDG_DATA_HOME/password-store"
+
+# vim:ft=bash

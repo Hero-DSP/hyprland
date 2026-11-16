@@ -1,0 +1,283 @@
+#!/bin/bash
+
+source vb-lib-cli
+
+VERBOSE=${VERBOSE:-false}
+
+source vb-lib-core
+
+DESKTOP_DIR="$XDG_DATA_HOME/applications"
+ICON_DIR="$DESKTOP_DIR/icons"
+WEBAPP_DATA_DIR="$XDG_DATA_HOME/webapps"
+
+if [[ -f "$XDG_CONFIG_HOME/vibranium/current/theme/fzf" ]]; then
+  source "$XDG_CONFIG_HOME/vibranium/current/theme/fzf"
+fi
+
+FZF_ARGS=(
+  --multi
+  --ignore-case
+  --highlight-line
+
+  --delimiter $'\t'
+  --with-nth 1
+
+  --info 'hidden'
+  --border 'bold'
+
+  --border-label ' alt-p: toggle preview, ctrl-j/k: next/prev item, tab: multi-select'
+  --border-label-pos 'bottom'
+
+  --list-label 'PWA List'
+  --list-border 'bold'
+
+  --input-label 'Filter PWAs'
+  --input-border 'bold'
+
+  --preview 'cat {2}'
+  --preview-border 'bold'
+  --preview-window 'right:50%:wrap'
+  --preview-label 'Desktop File'
+
+  --bind 'alt-p:toggle-preview'
+
+  --color "${FZF_COLORS:-pointer:white,marker:green}"
+)
+
+_operation_canceled() {
+  term::disable_input
+  printf "%s[VIBRANIUM]%s Operation canceled" "$R" "$RS"
+  trap 'exit 1' SIGHUP SIGINT SIGTERM SIGQUIT
+  read -r -n1 -s -p $'. Press any key to exit' _dummy
+  term::enable_input
+}
+
+_operation_complete() {
+  term::disable_input
+  printf "%s[VIBRANIUM]%s " "$G" "$RS"
+  trap '' SIGHUP SIGINT SIGTERM SIGQUIT
+  read -r -n1 -p $'Removal complete. Press any key to exit ' _dummy
+  term::enable_input
+}
+
+usage() {
+  shcat << 'EOF'
+Usage: vb-webapp-remove [OPTION]...
+
+Remove Progressive Web App shortcuts as .desktop launcher entries.
+If no options are provided, the script runs in interactive mode.
+
+Options:
+  --file FILE...      .desktop file(s) to remove (basename or full path)
+  -h, --help          Show this help and exit
+EOF
+}
+
+_has_webapp_exec() {
+  local line
+  while IFS= read -r line; do
+    [[ "$line" == Exec=*vb-launch-webapp* ]] && return 0
+  done < "$1"
+  return 1
+}
+
+_desktop_name() {
+  local line
+  while IFS= read -r line; do
+    if [[ "$line" == Name=* ]]; then
+      line="${line#Name=}"
+      echo "${line#PWA - }"
+      return
+    fi
+  done < "$1"
+}
+
+_is_chrome_webapp() {
+  grep -q '^Exec=.*--app-id=' "$1" 2>/dev/null
+}
+
+_chrome_icon_basename() {
+  while IFS= read -r line; do
+    [[ "$line" == Icon=* ]] && { echo "${line#Icon=}"; return; }
+  done < "$1"
+}
+
+# ---------------------------------------------------------------------------
+# Derive the browser data directory name from a URL.
+# Must stay in sync with the identically named function in vb-launch-webapp;
+# both must produce the same string for the same URL or removal will miss the
+# data directory the launcher created.
+# ---------------------------------------------------------------------------
+_profile_dir_from_url() {
+  local url="$1"
+  local host="${url#*://}"
+  host="${host%%[/?#:]*}"
+  host="${host,,}"
+  host="${host//\./-}"
+  printf '%s' "$host"
+}
+
+_remove_pwa() {
+  local name="$1" desktop_path="$2"
+  local removed=false exec_line=""
+
+  # Read the Exec= line before removing the file; the URL embedded in it is
+  # needed to derive the browser data directory path when --own-profile was used.
+  if [[ -f "$desktop_path" ]]; then
+    local line
+    while IFS= read -r line; do
+      if [[ "$line" == Exec=* ]]; then
+        exec_line="${line#Exec=}"
+        break
+      fi
+    done < "$desktop_path"
+    rm -f -- "$desktop_path"
+    removed=true
+  fi
+
+  if _is_chrome_webapp "$desktop_path"; then
+    local icon_basename
+    icon_basename="$(_chrome_icon_basename "$desktop_path")"
+    if [[ -n "$icon_basename" ]]; then
+      find "$XDG_DATA_HOME/icons" -name "${icon_basename}.png" -delete 2>/dev/null
+      removed=true
+    fi
+  elif [[ -f "$ICON_DIR/PWA - $name.png" ]]; then
+    rm -f -- "$ICON_DIR/PWA - $name.png"
+    removed=true
+  fi
+
+  # If the PWA was installed with --own-profile, remove its isolated browser
+  # data directory. The URL is always the last whitespace-separated token on
+  # the Exec= line regardless of other flags between the command and the URL.
+  if [[ "$exec_line" == *--own-profile* ]]; then
+    local url="${exec_line##* }"
+    local data_dir
+    data_dir="$WEBAPP_DATA_DIR/$(_profile_dir_from_url "$url")"
+    if [[ -d "$data_dir" ]]; then
+      rm -rf -- "$data_dir"
+      vb::print "$G" "Removed browser data for ${B}${name}${RS}"
+    fi
+  fi
+
+  if [[ "$removed" == true ]]; then
+    vb::print "$G" "Removed ${B}${name}${RS}"
+  else
+    log Error "No such PWA: $name"
+  fi
+}
+
+DESKTOP_FILES=()
+INTERACTIVE=true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+
+    --file)
+      INTERACTIVE=false
+      shift
+      if [[ $# -eq 0 ]]; then
+        log Error "--file requires at least one .desktop file argument"
+        log Error "Try --help for more information"
+        exit 1
+      fi
+      while [[ $# -gt 0 && "$1" != -* ]]; do
+        if [[ "$1" != *.desktop ]]; then
+          log Error "Not a .desktop file: $1"
+          log Error "Try --help for more information"
+          exit 1
+        fi
+        DESKTOP_FILES+=("$1")
+        shift
+      done
+      ;;
+
+    *)
+      log Error "Unknown option: $1"
+      log Error "Try --help for more information"
+      exit 1
+      ;;
+  esac
+done
+
+# --- Resolve targets ---
+
+TARGET_NAMES=()
+TARGET_PATHS=()
+
+if [[ $INTERACTIVE == true ]]; then
+  declare -A PWA_MAP
+
+  shopt -s nullglob
+  for file in "$DESKTOP_DIR"/'PWA - '*.desktop; do
+    _has_webapp_exec "$file" &&
+      PWA_MAP["$(_desktop_name "$file")"]="$file"
+  done
+  for file in "$DESKTOP_DIR"/chrome-*.desktop; do
+    _is_chrome_webapp "$file" && {
+      cname="$(_desktop_name "$file")"
+      PWA_MAP["[chrome] $cname"]="$file"
+    }
+  done
+  shopt -u nullglob
+
+  if ((${#PWA_MAP[@]} == 0)); then
+    term::show_header --color red
+    vb::print "$R" "No PWAs found"
+    _operation_canceled
+    exit 1
+  fi
+
+  mapfile -t SELECTED < <(
+    for name in "${!PWA_MAP[@]}"; do
+      printf '%s\t%s\n' "$name" "${PWA_MAP[$name]}"
+    done | sort | fzf "${FZF_ARGS[@]}"
+  )
+
+  term::show_header
+
+  if ((${#SELECTED[@]} == 0)); then
+    _operation_canceled
+    exit 1
+  fi
+
+  ((${#SELECTED[@]} == 1)) && suffix="" || suffix="s"
+  if ! term::ask_yes_no Y "You're about to remove ${#SELECTED[@]} PWA${suffix}. Continue?"; then
+    _operation_canceled
+    exit 1
+  fi
+
+  for entry in "${SELECTED[@]}"; do
+    TARGET_NAMES+=("${entry%%$'\t'*}")
+    TARGET_PATHS+=("${entry##*$'\t'}")
+  done
+
+else
+  for file_arg in "${DESKTOP_FILES[@]}"; do
+    [[ "$file_arg" == */* ]] && desktop_path="$file_arg" || desktop_path="$DESKTOP_DIR/$file_arg"
+
+    if [[ ! -f "$desktop_path" ]]; then
+      log Error "No such file: $file_arg"
+      continue
+    fi
+
+    filename="${desktop_path##*/}"
+    if [[ "$filename" != PWA\ -\ *.desktop && "$filename" != chrome-*.desktop ]]; then
+      log Warn "not a PWA/Chrome webapp file: $filename"
+      continue
+    fi
+
+    TARGET_NAMES+=("$(_desktop_name "$desktop_path")")
+    TARGET_PATHS+=("$desktop_path")
+  done
+fi
+
+for i in "${!TARGET_NAMES[@]}"; do
+  _remove_pwa "${TARGET_NAMES[$i]}" "${TARGET_PATHS[$i]}"
+done
+
+[[ $INTERACTIVE == true ]] && _operation_complete
