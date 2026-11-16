@@ -394,17 +394,17 @@ hl.bind(
   { description = "Open floating terminal" }
 )
 
-hl.bind("CTRL + ALT + L", hl.dsp.exec_raw("vb-cmd-lock-session"), { description = "Lock session" })
+hl.bind(mainMod .. " + ALT + L", hl.dsp.exec_raw("vb-cmd-lock-session"), { description = "Lock session" })
 hl.bind("switch:on:Lid Switch", hl.dsp.exec_raw("vb-cmd-lock-session"), { description = "Lock session on lid close" })
 
 hl.bind("CTRL + ALT + DELETE", hl.dsp.exec_raw("vb-core-launcher --power"), { description = "Power menu" })
-hl.bind(mainMod .. " + ALT + ESCAPE", hl.dsp.exec_raw("vb-core-launcher --power"), { description = "Power menu" })
+hl.bind(mainMod .. " +DELETE", hl.dsp.exec_raw("vb-core-launcher --power"), { description = "Power menu" })
 hl.bind("XF86PowerOff", hl.dsp.exec_raw("vb-core-launcher --power"), { description = "Power menu" })
 
 hl.bind("CTRL + ALT + W", hl.dsp.exec_raw("vb-core-wallpaper --next"), { description = "Change background" })
 hl.bind("CTRL + ALT + T", hl.dsp.exec_raw("vb-theme-set"), { description = "Change theme" })
 
-hl.bind(mainMod .. " + A", hl.dsp.exec_raw("vb-core-launcher"), { description = "App launcher" })
+hl.bind(mainMod .. " + slash", hl.dsp.exec_raw("vb-core-launcher"), { description = "App launcher" })
 hl.bind("XF86Search", hl.dsp.exec_raw("vb-core-launcher"), { description = "App launcher" })
 hl.bind("CTRL + ALT + C", hl.dsp.exec_raw("vb-core-color-picker"), { description = "Color picker" })
 
@@ -419,7 +419,7 @@ end, { description = "Freeze window" })
 
 -- Vibranium menus
 
-hl.bind("CTRL + ALT + V", hl.dsp.exec_raw("vb-menu"), { description = "Vibranium menu" })
+hl.bind(mainMod .. " + Space", hl.dsp.exec_raw("vb-menu"), { description = "Vibranium menu" })
 hl.bind("XF86Tools", hl.dsp.exec_raw("vb-menu"), { description = "Vibranium menu" })
 hl.bind("CTRL + ALT + U", hl.dsp.exec_raw("vb-menu-utilities"), { description = "Utilities menu" })
 hl.bind("CTRL + ALT + P", hl.dsp.exec_raw("vb-util-pass"), { description = "Password manager" })
