@@ -19,7 +19,7 @@ packages=("nvidia-settings")
 
 # Check for newer Turing+ architectures using the GSR capabilities flag
 if vb-hw-gpu -g nvidia; then
-  packages+=(nvidia-dkms nvidia-utils lib32-nvidia-utils libva-nvidia-driver)
+  packages+=(nvidia-open-dkms nvidia-utils nvidia-prime lib32-nvidia-utils libva-nvidia-driver)
   gpu_arch="turing_plus"
 else
   packages+=(nvidia-580xx-dkms nvidia-580xx-utils lib32-nvidia-580xx-utils)
