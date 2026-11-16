@@ -292,17 +292,15 @@ hl.bind("ALT + J", hl.dsp.group.prev(), {
   non_consuming = true,
 })
 
-hl.bind("ALT + TAB", hl.dsp.group.next(), {
-  description = "Group: next tab",
-  non_consuming = false,
-})
-
-hl.bind("ALT + Escape", hl.dsp.exec_raw("rofi -show window -show-icons"), { description = "Window switcher" })
-
-hl.bind("ALT + SHIFT + Grave", hl.dsp.group.prev(), {
-  description = "Group: previous tab",
-  non_consuming = false,
-})
+hl.bind(
+  "ALT + TAB",
+  hl.dsp.exec_raw("rofi -modes window -show window -show-icons -selected-row 1"),
+  { description = "Window switcher" }
+)
+--hl.bind("ALT + SHIFT + Grave", hl.dsp.group.prev(), {
+--  description = "Group: previous tab",
+--  non_consuming = false,
+--})
 
 hl.bind(mainMod .. " + CTRL + SHIFT + J", hl.dsp.group.move_window({ back = true }), {
   description = "Group: move tab backward",
