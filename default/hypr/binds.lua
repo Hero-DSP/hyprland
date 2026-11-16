@@ -555,7 +555,7 @@ end
 
 -- Power profile
 
-hl.bind(mainMod .. " + B", hl.dsp.exec_raw("vb-core-power --next"), { description = "Next power profile" })
+hl.bind(mainMod .. " + P", hl.dsp.exec_raw("vb-core-power --next"), { description = "Next power profile" })
 
 -- Other
 
