@@ -7,7 +7,7 @@ ConditionEnvironment=XDG_CURRENT_DESKTOP=Hyprland
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/wl-paste --watch cliphist store
+ExecStart=/bin/sh -c '/usr/bin/wl-paste --type text --watch cliphist store & /usr/bin/wl-paste --type image --watch cliphist store & wait'
 ExecStop=/usr/bin/cliphist wipe
 Restart=on-failure
 
