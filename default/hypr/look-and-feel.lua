@@ -39,7 +39,7 @@ hl.config({
     shadow = {
       enabled = os.getenv("CHASSIS_TYPE") ~= "vm",
       color = "rgba(17171770)",
-      render_power = 0,
+      render_power = 1,
       range = 5,
     },
   },
