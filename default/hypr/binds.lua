@@ -297,10 +297,10 @@ hl.bind(
   hl.dsp.exec_raw("rofi -modes window -show window -show-icons -selected-row 1"),
   { description = "Window switcher" }
 )
---hl.bind("ALT + SHIFT + Grave", hl.dsp.group.prev(), {
---  description = "Group: previous tab",
---  non_consuming = false,
---})
+hl.bind("ALT + SHIFT + Grave", hl.dsp.group.prev(), {
+  description = "Group: previous tab",
+  non_consuming = false,
+})
 
 hl.bind(mainMod .. " + CTRL + SHIFT + J", hl.dsp.group.move_window({ back = true }), {
   description = "Group: move tab backward",
