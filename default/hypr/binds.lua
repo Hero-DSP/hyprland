@@ -297,6 +297,8 @@ hl.bind("ALT + TAB", hl.dsp.group.next(), {
   non_consuming = false,
 })
 
+hl.bind("ALT + Escape", hl.dsp.exec_raw("rofi -show window -show-icons"), { description = "Window switcher" })
+
 hl.bind("ALT + SHIFT + Grave", hl.dsp.group.prev(), {
   description = "Group: previous tab",
   non_consuming = false,
