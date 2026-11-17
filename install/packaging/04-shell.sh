@@ -63,8 +63,8 @@ while true; do
 
       if [[ "$selected_shell_pkg" == "zsh" ]]; then
         packages+=(
-          "zsh-syntax-highlighting"
-          "zsh-autosuggestions"
+          "zoxide"
+          "fzf"
         )
       fi
     fi

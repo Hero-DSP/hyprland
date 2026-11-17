@@ -9,3 +9,4 @@ else
 fi
 
 sudo usermod --shell /usr/bin/$shell $USER
+cp -f "$HOME/.config/zsh/.p10k.zsh" "$HOME/.p10k.zsh"
