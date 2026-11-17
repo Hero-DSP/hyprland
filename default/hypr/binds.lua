@@ -421,7 +421,7 @@ end, { description = "Freeze window" })
 
 hl.bind(mainMod .. " + Space", hl.dsp.exec_raw("vb-menu"), { description = "Vibranium menu" })
 hl.bind("XF86Tools", hl.dsp.exec_raw("vb-menu"), { description = "Vibranium menu" })
-hl.bind("CTRL + ALT + U", hl.dsp.exec_raw("vb-menu-utilities"), { description = "Utilities menu" })
+hl.bind(mainMod .. " + U", hl.dsp.exec_raw("vb-menu-utilities"), { description = "Utilities menu" })
 hl.bind("CTRL + ALT + P", hl.dsp.exec_raw("vb-util-pass"), { description = "Password manager" })
 hl.bind(mainMod .. " + period", hl.dsp.exec_raw("vb-menu-emoji"), { description = "Emoji picker" })
 
