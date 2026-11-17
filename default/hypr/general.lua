@@ -2,7 +2,6 @@ hl.config({
   dwindle = {
     force_split = 2,
     preserve_split = true,
-    special_scale_factor = 0.98,
   },
 
   misc = {
@@ -55,3 +54,4 @@ hl.config({
     zoom_detached_camera = false,
   },
 })
+hl.exec_cmd("hyprctl keyword workspace 'special:scratchpad, gapsout:25'")

@@ -163,7 +163,7 @@ Hypr.Act.group = {
   toggle = wrap_dispatch(hl.dsp.group.toggle),
   next = wrap_dispatch(hl.dsp.group.next),
   prev = wrap_dispatch(hl.dsp.group.prev),
-  lock_active = wrap_dispatch(hl.dsp.group.lock_active),
+  lock_active = wrap_dispatch(hl.dsp.group.lock),
   move_window = wrap_dispatch(hl.dsp.group.move_window),
   active = wrap_dispatch(hl.dsp.group.active),
 }
