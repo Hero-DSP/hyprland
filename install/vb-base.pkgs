@@ -55,6 +55,7 @@ ncdu
 wget
 fzf
 jq
+keyd
 
 ##### DevOps & Infrastructure
 docker
