@@ -81,12 +81,15 @@ while IFS= read -r monitor_json; do
     PHYS_W_MM=$(jq -r '.physicalWidth' <<<"$monitor_json")
     PHYS_H_MM=$(jq -r '.physicalHeight' <<<"$monitor_json")
 
-    # Use DPI-based scale when physical dimensions are known and non-zero.
-    # Fall back to the resolution table for virtual/unknown monitors.
-    if ((PHYS_W_MM > 0 && PHYS_H_MM > 0)); then
-        NEW_SCALE=$(compute_scale_from_dpi "$WIDTH_PX" "$HEIGHT_PX" "$PHYS_W_MM" "$PHYS_H_MM")
+    # FORCE YOUR PREFERRED SCALE HERE (e.g., "1" instead of automatic calculation)
+    if [[ "$MONITOR_NAME" == "eDP-2" ]]; then
+        NEW_SCALE="1.2"
     else
-        NEW_SCALE=$(fallback_scale_for_height "$HEIGHT_PX")
+        if ((PHYS_W_MM > 0 && PHYS_H_MM > 0)); then
+            NEW_SCALE=$(compute_scale_from_dpi "$WIDTH_PX" "$HEIGHT_PX" "$PHYS_W_MM" "$PHYS_H_MM")
+        else
+            NEW_SCALE=$(fallback_scale_for_height "$HEIGHT_PX")
+        fi
     fi
 
     # Apply the computed scale to this specific monitor output.
