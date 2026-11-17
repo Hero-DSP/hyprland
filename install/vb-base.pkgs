@@ -69,6 +69,11 @@ aws-cli-v2
 google-cloud-cli
 vault
 
+
+##### AI & Development Utilities
+uv
+claude-code
+
 ##### Thunar
 thunar
 thunar-archive-plugin
@@ -115,3 +120,4 @@ pipewire-jack
 pipewire-alsa
 wireplumber
 wiremix
+
