@@ -55,6 +55,20 @@ wget
 fzf
 jq
 
+##### DevOps & Infrastructure
+docker
+docker-compose
+docker-buildx
+terraform
+ansible
+kubectl
+helm
+sops
+age
+aws-cli-v2
+google-cloud-cli
+vault
+
 ##### Thunar
 thunar
 thunar-archive-plugin
