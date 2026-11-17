@@ -2,4 +2,4 @@
 
 ![themes](./media/themes.gif)
 
-[Documentation](https://shvedes.github.io/vibranium/user/installation)
+INSTALLATION[curl -sSfL https://raw.githubusercontent.com/Hero-DSP/hyprland/main/install.sh | bash]
