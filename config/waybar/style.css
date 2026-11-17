@@ -134,3 +134,10 @@ tooltip, tooltip label {
     color: @foreground;
   }
 }
+
+#custom-nvidia {
+	color: #76b900;
+	font-size: 14px;
+	padding: 0 6px;
+}
+

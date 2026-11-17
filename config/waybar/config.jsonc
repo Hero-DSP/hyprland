@@ -45,6 +45,7 @@
 			"$XDG_CONFIG_HOME/waybar/modules/tray.jsonc",
 			"$XDG_CONFIG_HOME/waybar/modules/group-tray.jsonc",
 			"$XDG_CONFIG_HOME/waybar/modules/volume.jsonc",
+      "$XDG_CONFIG_HOME/waybar/modules/custom-nvidia.jsonc",
 			"$XDG_CONFIG_HOME/waybar/modules/custom-weather.jsonc",
 			"$XDG_CONFIG_HOME/waybar/modules/workspaces.jsonc",
 			"$XDG_CONFIG_HOME/waybar/modules/custom-vb-update.jsonc"
@@ -66,6 +67,7 @@
 			"custom/mod-separator",
 			// "hyprland/language",
 			"custom/recording-indicator",
+      "custom/nvidia",
 			"custom/power-profile",
 			"custom/color-picker",
 			"custom/nightshift",
