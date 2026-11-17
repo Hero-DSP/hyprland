@@ -1,0 +1,8 @@
+{
+	"custom/nvidia": {
+		"exec": "read -r util mem < <(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader,nounits 2>/dev/null | tr -d ','); procs=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | grep -c '[0-9]'); if [ \"${procs:-0}\" -gt 0 ] || [ \"${util:-0}\" -gt 5 ] || [ \"${mem:-0}\" -gt 50 ]; then echo \"{\\\"text\\\": \\\"●\\\", \\\"tooltip\\\": \\\"NVIDIA RTX 4050: Active (${util}% | ${mem} MiB)\\\"}\"; else echo '{\"text\": \"\"}'; fi",
+		"return-type": "json",
+		"interval": 2,
+		"tooltip": true
+	}
+}
