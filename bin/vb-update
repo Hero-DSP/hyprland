@@ -79,7 +79,7 @@ _detect_channel() {
   branch=$(git -C "$VIBRANIUM" branch --show-current)
   if [[ -z "$branch" ]]; then
     echo "release"
-  elif [[ "$branch" == "master" ]]; then
+  elif [[ "$branch" == "master" || "$branch" == "main" ]]; then
     echo "upstream"
   else
     _fail "On unknown branch '$branch'. Specify a channel."
@@ -124,7 +124,7 @@ _nuke() {
     local remote_ref
     case "$channel" in
       upstream)
-        remote_ref="origin/master"
+        remote_ref="origin/main"
         ;;
       *)
         remote_ref="origin/$channel"
@@ -209,7 +209,7 @@ _update() {
     local remote_ref
     case "$channel" in
       upstream)
-        remote_ref="origin/master"
+        remote_ref="origin/main"
         ;;
       *)
         remote_ref="origin/$channel"
