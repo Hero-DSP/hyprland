@@ -82,7 +82,7 @@ while IFS= read -r monitor_json; do
     PHYS_H_MM=$(jq -r '.physicalHeight' <<<"$monitor_json")
 
     # FORCE YOUR PREFERRED SCALE HERE (e.g., "1" instead of automatic calculation)
-    if [[ "$MONITOR_NAME" == "eDP-2" ]]; then
+    if [[ "$MONITOR_NAME" == "eDP-1" || "$MONITOR_NAME" == "eDP-2" ]]; then
         NEW_SCALE="1.2"
     else
         if ((PHYS_W_MM > 0 && PHYS_H_MM > 0)); then
