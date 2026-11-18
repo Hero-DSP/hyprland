@@ -67,14 +67,16 @@ kubectl
 helm
 sops
 age
+github-cli
 aws-cli-v2
-google-cloud-cli
+//google-cloud-cli
 vault
 
+//gcloud and claude after installing from cachy though they maynot have it
 
 ##### AI & Development Utilities
 uv
-claude-code
+//claude-code
 
 ##### Thunar
 thunar
