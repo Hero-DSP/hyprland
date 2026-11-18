@@ -122,24 +122,24 @@
 -- =========================================================
 
 hl.monitor({
-	output = "eDP-1",
-	mode = "preferred",
-	position = "auto",
-	scale = "1.2",
+  output = "eDP-1",
+  mode = "preferred",
+  position = "auto",
+  scale = "1.2",
 })
 
 -- fallback
 
 hl.monitor({
-	output = "",
-	mode = "preferred",
-	position = "auto",
-	scale = "1",
+  output = "",
+  mode = "preferred",
+  position = "auto",
+  scale = "1",
 })
 
 hl.monitor({
-	output = "eDP-2",
-	mode = "preferred",
-	position = "auto",
-	scale = "1.2",
+  output = "eDP-2",
+  mode = "preferred",
+  position = "auto",
+  scale = "1.2",
 })
