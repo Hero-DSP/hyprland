@@ -15,8 +15,8 @@ if ! systemctl -q --user is-active awww; then
   systemctl -q --user enable --now awww
 fi
 
-CURRENT_THEME="$(< "$XDG_CONFIG_HOME/vibranium/current/theme.name")"
-WALLPAPER_REGISTRY="$VIBRANIUM_STATE/wallpapers"
+CURRENT_THEME="$(<"$XDG_CONFIG_HOME/vibranium/current/theme.name")"
+WALLPAPER_REGISTRY="$VIBRANIUM_STATE/wallpaper.state"
 WALLPAPER_PATH=""
 
 if ! [[ -f "$WALLPAPER_REGISTRY" ]]; then
@@ -30,9 +30,9 @@ while IFS='=' read -r key value; do
     WALLPAPER_PATH="${WALLPAPER_PATH%\"}"
     break
   fi
-done < "$WALLPAPER_REGISTRY"
+done <"$WALLPAPER_REGISTRY"
 
 if [[ -z $WALLPAPER_PATH ]]; then
   IFS= read -r WALLPAPER_PATH < <(vb-core-wallpaper --get)
-  printf '%s="%s"\n' "$CURRENT_THEME" "$WALLPAPER_PATH" >> "$WALLPAPER_REGISTRY"
+  printf '%s="%s"\n' "$CURRENT_THEME" "$WALLPAPER_PATH" >>"$WALLPAPER_REGISTRY"
 fi
