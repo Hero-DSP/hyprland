@@ -135,11 +135,7 @@ hl.bind(
 )
 
 -- Toggle maximize for the active window (keeps bar & tabs visible).
-hl.bind(
-  mainMod .. " + N",
-  hl.dsp.window.fullscreen({ mode = "maximized" }),
-  { description = "Toggle maximize" }
-)
+hl.bind(mainMod .. " + N", hl.dsp.window.fullscreen({ mode = "maximized" }), { description = "Toggle maximize" })
 -- Toggle floating for the active window.
 -- When a tiled window is switched to floating it often retains its full tiled
 -- dimensions and extends off-screen. To avoid needing a manual resize and
@@ -417,6 +413,8 @@ hl.bind("CTRL + ALT + C", hl.dsp.exec_raw("vb-core-color-picker"), { description
 hl.bind("XF86Explorer", hl.dsp.exec_raw("vb-launch-cmd -- thunar"), { description = "File manager" })
 hl.bind("XF86HomePage", hl.dsp.exec_raw("vb-launch-cmd -- thunar"), { description = "File manager" })
 hl.bind(mainMod .. " + E", hl.dsp.exec_raw("vb-launch-cmd -- thunar"), { description = "File manager" })
+
+hl.bind(mainMod .. " + B", hl.dsp.exec_raw("vb-launch-cmd -- chromium"), { description = "Open browser" })
 
 -- Freeze the active window's process (SIGSTOP/SIGCONT).
 hl.bind("CTRL + ALT + F", function()
