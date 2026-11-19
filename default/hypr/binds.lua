@@ -535,12 +535,12 @@ hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 -- Workspace switching via mouse
 hl.bind(
   mainMod .. " + ALT + mouse_down",
-  hl.dsp.focus({ workspace = "m+1" }),
+  hl.dsp.focus({ workspace = "r+1" }),
   { description = "Next workspace (mouse)" }
 )
 hl.bind(
   mainMod .. " + ALT + mouse_up",
-  hl.dsp.focus({ workspace = "m-1" }),
+  hl.dsp.focus({ workspace = "r-1" }),
   { description = "Previous workspace (mouse)" }
 )
 
