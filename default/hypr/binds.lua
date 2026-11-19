@@ -532,6 +532,18 @@ hl.bind(
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
+-- Workspace switching via mouse
+hl.bind(
+  mainMod .. " + ALT + mouse_down",
+  hl.dsp.focus({ workspace = "m+1" }),
+  { description = "Next workspace (mouse)" }
+)
+hl.bind(
+  mainMod .. " + ALT + mouse_up",
+  hl.dsp.focus({ workspace = "m-1" }),
+  { description = "Previous workspace (mouse)" }
+)
+
 -- Brightness (not applicable in VMs)
 
 if chassis_type ~= "vm" then
