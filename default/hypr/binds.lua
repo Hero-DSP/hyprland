@@ -414,7 +414,7 @@ hl.bind("XF86Explorer", hl.dsp.exec_raw("vb-launch-cmd -- thunar"), { descriptio
 hl.bind("XF86HomePage", hl.dsp.exec_raw("vb-launch-cmd -- thunar"), { description = "File manager" })
 hl.bind(mainMod .. " + E", hl.dsp.exec_raw("vb-launch-cmd -- thunar"), { description = "File manager" })
 
-hl.bind(mainMod .. " + B", hl.dsp.exec_raw("vb-launch-cmd -- chromium"), { description = "Open browser" })
+hl.bind(mainMod .. " + B", hl.dsp.exec_raw("vb-launch-cmd -- librewolf"), { description = "Open browser" })
 
 -- Freeze the active window's process (SIGSTOP/SIGCONT).
 hl.bind("CTRL + ALT + F", function()
