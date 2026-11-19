@@ -134,6 +134,12 @@ hl.bind(
   { description = "Toggle fullscreen" }
 )
 
+-- Toggle maximize for the active window (keeps bar & tabs visible).
+hl.bind(
+  mainMod .. " + N",
+  hl.dsp.window.fullscreen({ mode = "maximized" }),
+  { description = "Toggle maximize" }
+)
 -- Toggle floating for the active window.
 -- When a tiled window is switched to floating it often retains its full tiled
 -- dimensions and extends off-screen. To avoid needing a manual resize and
