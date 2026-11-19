@@ -165,7 +165,7 @@ VIBRANIUM_VOLUME_SOURCE_LOOPBACK_VOLUME=50
 # @type string
 # @values png jpeg ppm
 # @desc File type to use when taking a screenshot.
-VIBRANIUM_SCREENSHOT_FILE_TYPE="jpeg"
+VIBRANIUM_SCREENSHOT_FILE_TYPE="png"
 
 # @type int
 # @range 0..100
