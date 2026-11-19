@@ -127,7 +127,12 @@ capture() {
       exit 1
     fi
 
-    grim "${GRIM_OPTS[@]}" -g "$region" - | satty --filename - --output-filename "$output_file"
+    # grim "${GRIM_OPTS[@]}" -g "$region" - | satty --filename - --output-filename "$output_file"
+    if [[ $ANNOTATE == true ]]; then
+      grim "${GRIM_OPTS[@]}" -g "$region" - | satty --filename - --output-filename "$output_file" --copy-command "wl-copy --type image/png"
+    else
+      grim "${GRIM_OPTS[@]}" -g "$region" "$output_file"
+    fi
     log Info "grim: region=$region output=$output_file"
     ;;
   window)
