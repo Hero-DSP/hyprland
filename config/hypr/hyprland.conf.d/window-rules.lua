@@ -241,3 +241,11 @@
 -- - Multiple rules can stack
 --
 -- ###########################################################################
+
+hl.window_rule({
+  name = "onlyoffice-suppress-maximize",
+  match = {
+    class = "^(DesktopEditors|onlyoffice-desktopeditors)$",
+  },
+  suppress_event = "maximize",
+})
