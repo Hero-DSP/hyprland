@@ -575,6 +575,8 @@ hl.bind(mainMod .. " + P", hl.dsp.exec_raw("vb-core-power --next"), { descriptio
 
 -- Other
 
+hl.bind("SUPER + SHIFT + C", hl.dsp.exec_raw("vb-toggle-inhibitor"), { description = "Toggle Caffeine Mode" })
+
 hl.bind("XF86Calculator", hl.dsp.exec_raw("vb-util-calc"), { description = "Toggle calculator" })
 
 hl.bind("SUPER + CTRL + equal", function()
