@@ -158,7 +158,7 @@
 --
 -- Example (disabled by default):
 --
--- hl.bind("ALT + W", hl.dsp.exec_raw("vb-core-launcher --web"), { description = "PWA Launcher" })
+hl.bind("ALT + W", hl.dsp.exec_raw("vb-core-launcher --pwa"), { description = "PWA Launcher" })
 -- hl.bind("ALT + A", hl.dsp.exec_raw("vb-core-launcher --ai"), { description = "AI Launcher" })
 --
 -- ###########################################################################
