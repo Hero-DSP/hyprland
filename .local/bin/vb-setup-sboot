@@ -1,0 +1,284 @@
+#!/bin/bash
+
+if [[ "$CHASSIS_TYPE" == vm ]]; then
+  echo "Not available in a VM" >&2
+  exit 1
+fi
+
+source vb-lib-core
+
+_operation_canceled() {
+  printf "%s[VIBRANIUM]%s Operation canceled" "$R" "$RS"
+  trap 'exit 1' SIGHUP SIGINT SIGTERM SIGQUIT
+  # shellcheck disable=SC2034
+  read -n1 -r -s -p $'. Press any key to exit' dummy
+}
+
+_operation_complete() {
+  printf "%s[VIBRANIUM]%s " "$G" "$RS"
+  trap '' SIGHUP SIGINT SIGTERM SIGQUIT
+  # shellcheck disable=SC2034
+  read -n1 -r -p $'Setup complete. Press any key to exit ' dummy
+}
+
+trap 'trap "exit 1" INT TERM HUP; _operation_canceled; exit 1' INT TERM HUP
+term::disable_input
+
+if [[ -f "$VIBRANIUM_STATE/secure-boot-setup.complete" ]]; then
+  term::show_header --color red
+  vb::print "$R" "Setup has been done. Pending reboot."
+  _operation_canceled
+  exit 1
+fi
+
+if [[ ! -f /sys/firmware/efi/fw_platform_size ]]; then
+  term::show_header --color red
+  vb::print "$R" "Not in ${P}UEFI${RS} mode"
+  _operation_canceled
+  exit 1
+fi
+
+CURRENT_ENTRY=$(bootctl status 2> /dev/null | awk -F': ' '/Current Entry/ {print $2}')
+
+# Safely glob efivars
+shopt -s nullglob
+SECUREBOOT_EFIVAR=(/sys/firmware/efi/efivars/SecureBoot-*)
+SETUP_MODE_EFIVAR=(/sys/firmware/efi/efivars/SetupMode-*)
+shopt -u nullglob
+
+if [[ ${#SECUREBOOT_EFIVAR[@]} -eq 0 || ${#SETUP_MODE_EFIVAR[@]} -eq 0 ]]; then
+  term::show_header --color red
+  vb::print "$R" "Could not locate Secure Boot EFI variables"
+  vb::print "$R" "Is the system booted in UEFI mode with efivars mounted?"
+  _operation_canceled
+  exit 1
+fi
+
+SECUREBOOT_RAW=$(od -An -t u1 -j4 -N1 "${SECUREBOOT_EFIVAR[0]}" | tr -d ' ')
+SETUP_MODE_RAW=$(od -An -t u1 -j4 -N1 "${SETUP_MODE_EFIVAR[0]}" | tr -d ' ')
+
+# Phase 4: Secure Boot is already active -> Offer TPM2 LUKS enrollment if not yet enrolled
+if ((SECUREBOOT_RAW == 1)); then
+  term::show_header --color green
+  vb::print "$G" "${P}Secure Boot${RS} is already active."
+
+  LUKS_DEV=$(lsblk -rno NAME,FSTYPE | awk '$2=="crypto_LUKS" {print "/dev/"$1; exit}')
+  if [[ -n "$LUKS_DEV" ]] && sudo test -f /etc/systemd/tpm2/pcr-public.pem; then
+    if ! sudo cryptsetup luksDump "$LUKS_DEV" 2>/dev/null | grep -q "systemd-tpm2"; then
+      vb::print "$Y" "LUKS partition ${P}$LUKS_DEV${RS} does not have a TPM2 token enrolled yet."
+      if term::ask_yes_no Y "Enroll TPM2 auto-unlock (PCR 7 + signed PCR 11 + PIN) on $LUKS_DEV?"; then
+        sudo systemd-cryptenroll "$LUKS_DEV" --wipe-slot=tpm2
+        if sudo systemd-cryptenroll \
+          --tpm2-device=auto \
+          --tpm2-pcrs=7 \
+          --tpm2-public-key-pcrs=11 \
+          --tpm2-public-key=/etc/systemd/tpm2/pcr-public.pem \
+          --tpm2-with-pin=yes \
+          "$LUKS_DEV"; then
+          vb::print "$G" "TPM2 enrolled on ${P}$LUKS_DEV${RS}!"
+          if term::ask_yes_no Y "Reboot now to test TPM2 + PIN unlock?"; then
+            systemctl reboot
+          fi
+        else
+          vb::print "$R" "TPM2 enrollment failed."
+        fi
+      fi
+    else
+      vb::print "$G" "TPM2 LUKS token is already enrolled on ${P}$LUKS_DEV${RS}."
+    fi
+  fi
+
+  _operation_complete
+  exit 0
+fi
+
+if ((SETUP_MODE_RAW == 0)); then
+  term::show_header --color red
+  vb::print "$R" "Secure Boot cannot be enabled: firmware is locked (Setup Mode is off)"
+  vb::print "$R" "Enter BIOS and enable Setup Mode first"
+  _operation_canceled
+  exit 1
+fi
+
+term::show_header
+
+if term::ask_yes_no Y "Setup Secure Boot + UKI PCR 11 signing (for TPM2)?"; then
+  vb::print "$Y" "To configure efivars, UKIs, and TPM2 keys, Vibranium needs sudo"
+  (while true; do
+    sudo -v
+    sleep 5
+  done) &
+  sudo_pid=$!
+else
+  _operation_canceled
+  exit 1
+fi
+
+_efi_nvram_writable() {
+  findmnt -n -o OPTIONS /sys/firmware/efi/efivars 2> /dev/null | grep -q '\brw\b' || return 1
+  local canary="/sys/firmware/efi/efivars/VibraniumProbe-00000000-0000-0000-0000-000000000000"
+  printf '\x07\x00\x00\x00\x00' | sudo tee "$canary" &> /dev/null || return 1
+  sudo chattr -i "$canary" 2> /dev/null
+  sudo rm -f "$canary" 2> /dev/null
+  return 0
+}
+
+if ! _efi_nvram_writable; then
+  kill $sudo_pid 2>/dev/null || true
+  vb::print "$R" "EFI NVRAM is not writable - key enrollment will fail"
+  vb::print "$R" "Try: ${R}sudo ${G}mount ${Y}-o ${B}remount,rw ${P}/sys/firmware/efi/efivars${RS}"
+  _operation_canceled
+  exit 1
+fi
+
+ESP_MOUNT=$(bootctl --print-esp-path 2> /dev/null)
+[[ -z "$ESP_MOUNT" && -d /boot/efi ]] && ESP_MOUNT=/boot/efi
+[[ -z "$ESP_MOUNT" && -d /efi ]] && ESP_MOUNT=/efi
+
+if [[ -z "$ESP_MOUNT" ]] || [[ ! -d "$ESP_MOUNT" ]]; then
+  kill $sudo_pid 2>/dev/null || true
+  vb::print "$R" "Could not locate a valid ESP mount point"
+  _operation_canceled
+  exit 1
+fi
+
+LUKS_DEV=$(lsblk -rno NAME,FSTYPE | awk '$2=="crypto_LUKS" {print "/dev/"$1; exit}')
+if [[ -z "$LUKS_DEV" ]]; then
+  kill $sudo_pid 2>/dev/null || true
+  vb::print "$R" "No crypto_LUKS partition found"
+  _operation_canceled
+  exit 1
+fi
+LUKS_UUID=$(sudo blkid -s UUID -o value "$LUKS_DEV")
+
+# 1. Install sbctl & systemd-ukify
+for pkg in sbctl systemd-ukify; do
+  if ! pacman -Qi "$pkg" > /dev/null 2>&1; then
+    vb-pkg-install --embedded -- "$pkg"
+  fi
+done
+
+# 2. Create & enroll sbctl keys
+if ! sudo sbctl status 2>/dev/null | grep -q "Installed:.*✓"; then
+  sudo sbctl --quiet create-keys &
+  if ! term::spinner $! "${Y}[VIBRANIUM]${RS} Creating Secure Boot keys" "- ${G}Done${RS}"; then
+    kill $sudo_pid 2>/dev/null || true
+    vb::print "$R" "Failed to create keys"
+    _operation_canceled
+    exit 1
+  fi
+fi
+
+sudo chattr -i /sys/firmware/efi/efivars/{PK,KEK,db}* 2>/dev/null || true
+sudo sbctl --quiet enroll-keys -m &
+if ! term::spinner $! "${Y}[VIBRANIUM]${RS} Enrolling keys + Microsoft CA into firmware" "- ${G}Done${RS}"; then
+  kill $sudo_pid 2>/dev/null || true
+  vb::print "$R" "Key enrollment failed"
+  _operation_canceled
+  exit 1
+fi
+
+# 3. Generate PCR 11 RSA keypair & /etc/kernel/uki.conf
+sudo mkdir -p /etc/systemd/tpm2 /etc/kernel "$ESP_MOUNT/EFI/Linux"
+sudo chmod 700 /etc/systemd/tpm2
+
+if [[ ! -f /etc/systemd/tpm2/pcr-private.pem ]]; then
+  vb::print "$Y" "Generating PCR 11 RSA signing keypair..."
+  sudo openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
+    -out /etc/systemd/tpm2/pcr-private.pem
+  sudo openssl rsa -in /etc/systemd/tpm2/pcr-private.pem -pubout \
+    -out /etc/systemd/tpm2/pcr-public.pem
+  sudo chmod 600 /etc/systemd/tpm2/pcr-private.pem
+fi
+
+sudo tee /etc/kernel/uki.conf > /dev/null << 'UKI_EOF'
+[UKI]
+PCRBanks=sha256
+
+[PCRSignature:systemd]
+Phases=enter-initrd
+PCRPrivateKey=/etc/systemd/tpm2/pcr-private.pem
+PCRPublicKey=/etc/systemd/tpm2/pcr-public.pem
+UKI_EOF
+
+# 4. Configure UKI + ukify presets for all installed kernels
+for vmlinuz in /boot/vmlinuz-*; do
+  [[ -e "$vmlinuz" ]] || continue
+  kname="${vmlinuz#/boot/vmlinuz-}"
+  preset="/etc/mkinitcpio.d/${kname}.preset"
+  [[ -f "$preset" ]] && sudo cp "$preset" "${preset}.bak"
+
+  sudo tee "$preset" > /dev/null << PRESET_EOF
+ALL_kver="/boot/vmlinuz-${kname}"
+PRESETS=('default' 'fallback')
+
+default_config="/etc/mkinitcpio.conf"
+default_uki="${ESP_MOUNT}/EFI/Linux/arch-${kname}.efi"
+default_uki_generator="ukify"
+
+fallback_config="/etc/mkinitcpio.conf"
+fallback_uki="${ESP_MOUNT}/EFI/Linux/arch-${kname}-fallback.efi"
+fallback_uki_generator="ukify"
+fallback_options="-S autodetect"
+PRESET_EOF
+
+  sudo rm -f "/boot/initramfs-${kname}.img" "/boot/initramfs-${kname}-fallback.img"
+done
+
+# 5. Configure /etc/kernel/cmdline & systemd + sd-encrypt HOOKS (XFS/ext4 compatible)
+if [[ -f /etc/kernel/cmdline ]]; then
+  sudo cp /etc/kernel/cmdline /etc/kernel/cmdline.bak
+  CURRENT_CMDLINE=$(cat /etc/kernel/cmdline)
+else
+  CURRENT_CMDLINE=$(cat /proc/cmdline)
+fi
+
+if ! echo "$CURRENT_CMDLINE" | grep -q "rd.luks.name=${LUKS_UUID}=root"; then
+  EXTRA_FLAGS=$(echo "$CURRENT_CMDLINE" | tr ' ' '\n' | grep -Ev '^(root=|cryptdevice=|rd\.luks\.|rw$|initrd=|BOOT_IMAGE=)' | tr '\n' ' ' | xargs || true)
+  echo "root=/dev/mapper/root rw rd.luks.name=${LUKS_UUID}=root rd.luks.options=tpm2-device=auto ${EXTRA_FLAGS}" | xargs | sudo tee /etc/kernel/cmdline > /dev/null
+fi
+
+sudo cp /etc/mkinitcpio.conf /etc/mkinitcpio.conf.bak
+if grep -qE '^HOOKS=.*\bencrypt\b' /etc/mkinitcpio.conf && ! grep -qE '^HOOKS=.*\bsd-encrypt\b' /etc/mkinitcpio.conf; then
+  sudo sed -i -E 's/\budev\b/systemd/g; s/\bkeymap\b/sd-vconsole/g; s/\bconsolefont\b//g; s/\bencrypt\b/sd-encrypt/g; s/  +/ /g' /etc/mkinitcpio.conf
+fi
+
+# Archive legacy BLS .conf entries if present so systemd-boot uses the new UKIs
+if compgen -G "${ESP_MOUNT}/loader/entries/*.conf" > /dev/null; then
+  sudo mkdir -p "${ESP_MOUNT}/loader/entries.bak"
+  sudo mv "${ESP_MOUNT}"/loader/entries/*.conf "${ESP_MOUNT}/loader/entries.bak/"
+fi
+
+# 6. Build signed UKIs & sign all EFI binaries
+sudo mkinitcpio -P &> /dev/null &
+if ! term::spinner $! "${Y}[VIBRANIUM]${RS} Building PCR-signed UKIs (mkinitcpio -P)" "- ${G}Done${RS}"; then
+  kill $sudo_pid 2>/dev/null || true
+  vb::print "$R" "Failed to regenerate initramfs/UKIs"
+  _operation_canceled
+  exit 1
+fi
+
+while IFS= read -r f; do
+  vb::print "$Y" "Signing ${P}$f${RS}"
+  if ! sudo sbctl --quiet sign --save "$f"; then
+    kill $sudo_pid 2>/dev/null || true
+    vb::print "$R" "Failed to sign $f"
+    vb::print "$Y" "Rolling back: unenrolling keys from firmware"
+    sudo sbctl --quiet reset
+    _operation_canceled
+    exit 1
+  fi
+done < <(sudo find "$ESP_MOUNT" -type f -iname '*.efi')
+
+sudo sbctl --quiet sign-all
+
+kill $sudo_pid 2>/dev/null || true
+touch "$VIBRANIUM_STATE/secure-boot-setup.complete"
+
+vb::print "$G" "Pre-TPM Secure Boot & UKI PCR 11 setup complete!"
+vb::print "$Y" "After enabling Secure Boot in BIOS and rebooting, open Secure Boot setup again to enroll TPM2."
+if term::ask_yes_no Y "Reboot into UEFI/BIOS to enable Secure Boot now?"; then
+  systemctl reboot --firmware-setup
+else
+  _operation_complete
+fi
