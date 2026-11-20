@@ -225,7 +225,7 @@ PRESET_EOF
   sudo rm -f "/boot/initramfs-${kname}.img" "/boot/initramfs-${kname}-fallback.img"
 done
 
-# 5. Configure /etc/kernel/cmdline & systemd + sd-encrypt HOOKS (XFS/ext4 compatible)
+# 5. Configure /etc/kernel/cmdline (leaves /etc/mkinitcpio.conf HOOKS untouched)
 if [[ -f /etc/kernel/cmdline ]]; then
   sudo cp /etc/kernel/cmdline /etc/kernel/cmdline.bak
   CURRENT_CMDLINE=$(cat /etc/kernel/cmdline)
@@ -236,11 +236,6 @@ fi
 if ! echo "$CURRENT_CMDLINE" | grep -q "rd.luks.name=${LUKS_UUID}=root"; then
   EXTRA_FLAGS=$(echo "$CURRENT_CMDLINE" | tr ' ' '\n' | grep -Ev '^(root=|cryptdevice=|rd\.luks\.|rw$|initrd=|BOOT_IMAGE=)' | tr '\n' ' ' | xargs || true)
   echo "root=/dev/mapper/root rw rd.luks.name=${LUKS_UUID}=root rd.luks.options=tpm2-device=auto ${EXTRA_FLAGS}" | xargs | sudo tee /etc/kernel/cmdline > /dev/null
-fi
-
-sudo cp /etc/mkinitcpio.conf /etc/mkinitcpio.conf.bak
-if grep -qE '^HOOKS=.*\bencrypt\b' /etc/mkinitcpio.conf && ! grep -qE '^HOOKS=.*\bsd-encrypt\b' /etc/mkinitcpio.conf; then
-  sudo sed -i -E 's/\budev\b/systemd/g; s/\bkeymap\b/sd-vconsole/g; s/\bconsolefont\b//g; s/\bencrypt\b/sd-encrypt/g; s/  +/ /g' /etc/mkinitcpio.conf
 fi
 
 # Archive legacy BLS .conf entries if present so systemd-boot uses the new UKIs
