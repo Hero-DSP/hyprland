@@ -18,4 +18,4 @@ fi
 rofi -modi emoji -show emoji -p "Emoji" \
   -theme-str "window{width: 400px;}" \
   -emoji-format "{emoji} {name}" \
-  -emoji-mode copy
+  -emoji-mode insert
