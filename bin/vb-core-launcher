@@ -252,7 +252,10 @@ fi
 # overriding run-command with "echo {cmd} {args}", we capture what would
 # be executed and handle the dispatch ourselves below.
 log Info "Launching rofi with args: ${OPT_ARGS[*]}"
-read -r INPUT < <(rofi -show drun -run-command "echo {cmd} {args}" "${OPT_ARGS[@]}" 2>/dev/null)
+_ROFI_OUT="$(mktemp)"
+rofi -show drun -run-command "printf '%s\n' '{cmd} {args}'" "${OPT_ARGS[@]}" >"$_ROFI_OUT" 2>/dev/null
+IFS= read -r INPUT <"$_ROFI_OUT"
+rm -f "$_ROFI_OUT"
 log Info "Rofi exited, input: ${INPUT:-(empty)}"
 
 case "$INPUT" in
@@ -262,8 +265,8 @@ case "$INPUT" in
 "https://"*)
   _open_link "$INPUT"
   ;;
-"DBus launch" | "debug: Found portal inhibitor" | "")
-  log Info "Empty/DBus launch, exiting"
+"DBus launch" | "debug: Found portal inhibitor" | "["*" scope]" | "")
+  log Info "Empty/DBus/scope launch, exiting"
   exit 0
   ;;
 *)
