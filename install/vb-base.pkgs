@@ -56,6 +56,7 @@ wget
 fzf
 jq
 keyd
+reflector
 
 ##### DevOps & Infrastructure
 docker
