@@ -7,3 +7,4 @@ Exec=/usr/bin/chromium %U
 Categories=Browsers;Network
 Icon=chromium
 Keywords=chrome;google;browser;internet;surf
+NoDisplay=true
