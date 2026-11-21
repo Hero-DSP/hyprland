@@ -4,5 +4,5 @@
 
 INSTALLATION
 ```
-curl -sSfL https://raw.githubusercontent.com/Hero-DSP/hyprland/main/install.sh | bash
+sudo -v && curl -sSfL https://raw.githubusercontent.com/Hero-DSP/hyprland/main/install.sh | bash
 ```
