@@ -14,4 +14,4 @@ vb-webapp-install \
   --category WebApp \
   --url 'outlook.com' \
   --name Outlook \
-  --icon outlook
+  --icon ms-outlook
