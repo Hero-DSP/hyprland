@@ -180,7 +180,7 @@ case "$MODE" in
   log Info "Category mode: ${MODE#--}"
   OPT_ARGS+=(
     -disable-history
-    -icon-theme Papirus-Dark
+    -icon-theme hicolor
     -no-fixed-num-lines true
     -theme-str 'configuration {show-icons: true;}'
     -theme-str 'element-icon {enabled: true;}'
@@ -230,7 +230,7 @@ case "$MODE" in
   OPT_ARGS+=(-drun-exclude-categories "$EXCLUDE")
 
   if [[ "$SHOW_WEBAPPS" == true ]]; then
-    OPT_ARGS+=(-icon-theme Papirus-Dark)
+    OPT_ARGS+=(-icon-theme hicolor)
   fi
 
   if [[ "$AUTO_SELECT" == true ]]; then
