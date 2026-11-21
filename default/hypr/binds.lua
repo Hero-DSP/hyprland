@@ -430,7 +430,7 @@ hl.bind("CTRL + ALT + P", hl.dsp.exec_raw("vb-util-pass"), { description = "Pass
 hl.bind(mainMod .. " + period", hl.dsp.exec_raw("vb-menu-emoji"), { description = "Emoji picker" })
 
 if chassis_type ~= "vm" then
-  hl.bind("CTRL + ALT + R", hl.dsp.exec_raw("vb-menu-recording"), { description = "Record screen" })
+  hl.bind(mainMod .. "+ SHIFT + R", hl.dsp.exec_raw("vb-menu-recording"), { description = "Record screen" })
 end
 
 -- Clipboard
