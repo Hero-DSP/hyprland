@@ -21,6 +21,9 @@ title_text = $imv_current_file
 # Unload all default imv keybindings.
 suppress_default_binds = true
 
+scaling_mode = shrink
+upscaling_method = nearest_neighbour
+
 [binds]
 q = quit
 
