@@ -442,7 +442,7 @@ hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_raw("vb-core-clipboard --clear"),
 
 hl.bind(
   mainMod .. " + SHIFT + S",
-  hl.dsp.exec_raw("vb-core-screenshot --region"),
+  hl.dsp.exec_raw("vb-core-screenshot --region --annotate"),
   { description = "Screenshot (region)" }
 )
 hl.bind(
