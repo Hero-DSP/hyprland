@@ -141,3 +141,14 @@ tooltip, tooltip label {
 	padding: 0 6px;
 }
 
+#tray menu {
+  padding: 6px;
+}
+
+#tray menu menuitem {
+  padding: 6px 12px;
+}
+
+#tray menu separator {
+  margin: 4px 0;
+}
