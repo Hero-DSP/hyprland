@@ -58,6 +58,7 @@ jq
 keyd
 reflector
 nwg-displays
+network-manager-applet
 
 ##### DevOps & Infrastructure
 docker
