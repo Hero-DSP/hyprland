@@ -140,13 +140,12 @@ tooltip, tooltip label {
 	font-size: 14px;
 	padding: 0 6px;
 }
-
 #tray menu {
-  padding: 6px;
+  padding: 8px;
 }
 
 #tray menu menuitem {
-  padding: 6px 12px;
+  padding: 2px 10px;
 }
 
 #tray menu separator {
