@@ -85,7 +85,9 @@ thunar
 thunar-archive-plugin
 thunar-volman
 ffmpegthumbnailer
-xarchiver
+file-roller
+gzip
+tar
 tumbler
 lrzip
 unarj
