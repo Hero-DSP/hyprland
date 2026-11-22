@@ -39,6 +39,7 @@ j = prev 1
 <Shift+K> = pan 0 +20
 
 0 = reset
+1 = zoom actual
 <Shift+R> = reset
 
 r = rotate by 90
