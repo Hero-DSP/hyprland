@@ -5,23 +5,24 @@
 -- These are Vibranium defaults. Use Vibranium Setttings to change.
 
 hl.config({
-  decoration = {
-    dim_inactive = true,
-    rounding = 0,
+	xwayland = {
+		force_zero_scaling = true,
+	},
 
-    blur = {
-      enabled = false,
-      size = 5,
-    },
+	decoration = {
+		active_opacity = 0.92,
+		inactive_opacity = 0.85,
+		dim_inactive = true,
+		rounding = 0,
 
-    shadow = {
-      enabled = true,
-    },
-  },
+		blur = {
+			enabled = true,
+			size = 10,
+			passes = 3,
+		},
 
-})
-hl.config({
-  xwayland = {
-    force_zero_scaling = true,
-  },
+		shadow = {
+			enabled = true,
+		},
+	},
 })
