@@ -27,8 +27,7 @@ sudo ufw-docker install
 sudo systemctl restart ufw
 sudo ufw reload
 
-if systemctl is-active --quiet docker; then
-  sudo systemctl restart docker
-fi
+sudo systemctl enable --now docker
+sudo systemctl restart docker
 
 echo "ufw-docker integration configured successfully."
