@@ -6,6 +6,7 @@ hyprlock
 hypridle
 hyprpicker
 xdg-desktop-portal-hyprland
+hyprpm
 
 ###### Essentials
 sound-theme-freedesktop
@@ -55,6 +56,7 @@ ncdu
 wget
 fzf
 jq
+socat
 keyd
 reflector
 nwg-displays
