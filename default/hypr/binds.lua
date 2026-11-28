@@ -581,6 +581,17 @@ hl.bind(mainMod .. " + P", hl.dsp.exec_raw("vb-core-power --next"), { descriptio
 hl.bind(mainMod .. " + N", hl.dsp.exec_raw("dunstctl history-pop"), { description = "Pop last notification" })
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_raw("dunstctl close-all"), { description = "Dismiss all notifications" })
 
+--rofi for dunst notification
+-- dunst notification
+--hl.bind(
+--  mainMod .. " + N",
+--  hl.dsp.exec_raw(
+--    [[sh -c 'dunstctl history | jq -r ".data[0][] | \"\(.id.data)\t[\(.appname.data)] \(.summary.data): \(.body.data | gsub(\"\n\"; \" \"))\"" | rofi -dmenu -i -with-nth 2 -delimiter "\t" -theme "$XDG_CONFIG_HOME/rofi/config.rasi" -theme-str "window { width: 700; } listview { lines: 15; }" -p "Notifications" | cut -f1 | xargs -r dunstctl history-pop']]
+--  ),
+--  { description = "Notification history" }
+--)
+--hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_raw("dunstctl close-all"), { description = "Dismiss all notifications" })
+
 -- Other
 
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_raw("vb-toggle-inhibitor"), { description = "Toggle Caffeine Mode" })
