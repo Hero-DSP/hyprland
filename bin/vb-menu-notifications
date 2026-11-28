@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+items="$(
+  dunstctl history | jq -r '
+    .data[0][]? |
+    "[\(.appname.data // "app")] \(.summary.data // "") - \((.body.data // "") | gsub("[\r\n]+"; " "))"
+  ' | nl -w1 -s': '
+)"
+
+[ -n "$items" ] || exit 0
+
+chosen="$(
+  printf '%s\n' "$items" | rofi -dmenu -i -no-levenshtein-sort \
+    -theme "${XDG_CONFIG_HOME:-$HOME/.config}/rofi/config.rasi" \
+    -theme-str 'window { width: 750px; } listview { lines: 15; }' \
+    -p "Notifications" || true
+)"
+
+[ -n "$chosen" ] && dunstctl history-pop
