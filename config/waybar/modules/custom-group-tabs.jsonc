@@ -1,0 +1,8 @@
+{
+  "custom/group-tabs": {
+    "exec": "$HOME/.config/waybar/scripts/group-tabs.sh",
+    "return-type": "plain",
+    "format": "  {}",
+    "tooltip": false
+  }
+}
