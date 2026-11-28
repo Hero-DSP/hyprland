@@ -48,12 +48,13 @@
       "$XDG_CONFIG_HOME/waybar/modules/custom-nvidia.jsonc",
 			"$XDG_CONFIG_HOME/waybar/modules/custom-weather.jsonc",
 			"$XDG_CONFIG_HOME/waybar/modules/workspaces.jsonc",
-			"$XDG_CONFIG_HOME/waybar/modules/custom-vb-update.jsonc"
+      "$XDG_CONFIG_HOME/waybar/modules/custom-vb-update.jsonc",
+      "$XDG_CONFIG_HOME/waybar/modules/custom-group-tabs.jsonc"
 		],
 
 		// All custom modules listed here can and should be enabled or disabled
 		// directly from Vibranium settings.
-		"modules-left": ["hyprland/workspaces"],
+    "modules-left": ["hyprland/workspaces", "custom/group-tabs"],
 		"modules-center": ["custom/weather", "clock", "custom/pacman"],
 		"modules-right": [
 			"custom/vibranium-update",
