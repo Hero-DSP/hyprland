@@ -85,27 +85,45 @@
 -- Workspace switching with 3-finger horizontal swipe:
 --
 hl.gesture({
-  fingers = 3,
-  direction = "horizontal",
-  action = "workspace",
+	fingers = 3,
+	direction = "horizontal",
+	action = "workspace",
 })
 
 --
 -- Close window with 4-finger swipe down:
 --
 hl.gesture({
-  fingers = 4,
-  direction = "down",
-  action = "close",
+	fingers = 4,
+	direction = "down",
+	action = "close",
 })
 
 --
 -- Zoom with pinch gesture:
 --
 hl.gesture({
-  fingers = 3,
-  direction = "pinch",
-  action = "cursorZoom",
+	fingers = 2,
+	direction = "pinch",
+	action = "cursorZoom",
+})
+
+-- Scroll to next window in the active group with 3-finger swipe up:
+hl.gesture({
+	fingers = 3,
+	direction = "up",
+	action = function()
+		hl.dispatch(hl.dsp.group.next())
+	end,
+})
+
+-- Scroll to previous window in the active group with 3-finger swipe down:
+hl.gesture({
+	fingers = 3,
+	direction = "down",
+	action = function()
+		hl.dispatch(hl.dsp.group.prev())
+	end,
 })
 
 -- hl.gesture({
