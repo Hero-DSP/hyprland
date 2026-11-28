@@ -135,7 +135,7 @@ hl.bind(
 )
 
 -- Toggle maximize for the active window (keeps bar & tabs visible).
-hl.bind(mainMod .. " + N", hl.dsp.window.fullscreen({ mode = "maximized" }), { description = "Toggle maximize" })
+hl.bind(mainMod .. " + M", hl.dsp.window.fullscreen({ mode = "maximized" }), { description = "Toggle maximize" })
 -- Toggle floating for the active window.
 -- When a tiled window is switched to floating it often retains its full tiled
 -- dimensions and extends off-screen. To avoid needing a manual resize and
@@ -476,7 +476,11 @@ hl.bind(
 hl.bind("XF86AudioMute", hl.dsp.exec_raw("vb-core-volume --volume-toggle"), { description = "Volume mute" })
 hl.bind("XF86AudioMicMute", hl.dsp.exec_raw("vb-core-volume --microphone-toggle"), { description = "Mute microphone" })
 
-hl.bind(mainMod .. " + M", hl.dsp.exec_raw("vb-core-volume --microphone-toggle"), { description = "Mute microphone" })
+hl.bind(
+  mainMod .. " + SHIFT + M",
+  hl.dsp.exec_raw("vb-core-volume --microphone-toggle"),
+  { description = "Mute microphone" }
+)
 hl.bind(
   mainMod .. " + SHIFT + XF86AudioMute",
   hl.dsp.exec_raw("vb-core-volume --microphone-toggle"),
@@ -572,6 +576,10 @@ end
 -- Power profile
 
 hl.bind(mainMod .. " + P", hl.dsp.exec_raw("vb-core-power --next"), { description = "Next power profile" })
+
+-- dunst notification
+hl.bind(mainMod .. " + N", hl.dsp.exec_raw("dunstctl history-pop"), { description = "Pop last notification" })
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_raw("dunstctl close-all"), { description = "Dismiss all notifications" })
 
 -- Other
 
